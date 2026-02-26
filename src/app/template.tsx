@@ -8,7 +8,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 // Site constants
-const SITE_URL = "https://dressexpress.com.bd";
+const SITE_URL = "https://Shoppingbd.com.bd";
 const OG_IMAGE_URL = `/assets/mega-logo.png`;
 const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID;
 const TAG_SERVER = process.env.NEXT_PUBLIC_TAG_SERVER;
@@ -16,18 +16,18 @@ const GOOGLE_SITE_VERIFICATION_CODE =
   process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION_CODE;
 
 export const metadata: Metadata = {
-  title: "dressexpress_girl| Your Ultimate Shopping Destination",
+  title: "Shoppingbd_girl| Your Ultimate Shopping Destination",
   description:
-    "Discover unbeatable deals on electronics, fashion, home goods & more at dressexpress!",
+    "Discover unbeatable deals on electronics, fashion, home goods & more at Shoppingbd!",
   verification: {
     google: GOOGLE_SITE_VERIFICATION_CODE,
   },
   openGraph: {
-    title: "dressexpress_girl| Your Ultimate Shopping Destination",
+    title: "Shoppingbd_girl| Your Ultimate Shopping Destination",
     description:
-      "Discover unbeatable deals on electronics, fashion, home goods & more at dressexpress!",
+      "Discover unbeatable deals on electronics, fashion, home goods & more at Shoppingbd!",
     url: SITE_URL,
-    siteName: "dressexpress",
+    siteName: "Shoppingbd",
     type: "website",
     locale: "en_US",
     images: [
@@ -35,15 +35,15 @@ export const metadata: Metadata = {
         url: OG_IMAGE_URL,
         width: 1200,
         height: 630,
-        alt: "dressexpress_girllogo on shopping-cart background",
+        alt: "Shoppingbd_girllogo on shopping-cart background",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "dressexpress_girl| Your Ultimate Shopping Destination",
+    title: "Shoppingbd_girl| Your Ultimate Shopping Destination",
     description:
-      "Discover unbeatable deals on electronics, fashion, home goods & more at dressexpress!",
+      "Discover unbeatable deals on electronics, fashion, home goods & more at Shoppingbd!",
     images: [OG_IMAGE_URL],
   },
 };
@@ -56,7 +56,7 @@ export default function Template({ children }: { children: React.ReactNode }) {
       className={ubuntuRegular.className}
     >
       <head>
-        <title>dressexpress | Your Ultimate Shopping Destination</title>
+        <title>Shoppingbd | Your Ultimate Shopping Destination</title>
         <meta
           name="facebook-domain-verification"
           content={`${process.env.NEXT_PUBLIC_FACEBOOK_DOMAIN_VERIFICATION}`}
@@ -91,7 +91,7 @@ n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '1253338489582643');
+fbq('init', '907602542232309');
 fbq('track', 'PageView');
 
         `,
