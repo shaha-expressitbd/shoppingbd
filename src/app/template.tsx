@@ -1,6 +1,5 @@
 import { notosans } from "@/lib/fonts";
 import { AppProviders } from "@/lib/Provider/AppProvider";
-import { GoogleTagManager } from "@next/third-parties/google";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
@@ -137,18 +136,18 @@ fbq('track', 'PageView');
           `,
           }}
         />
-        {process.env.NEXT_PUBLIC_GTM_ID && (
+        {/* {process.env.NEXT_PUBLIC_GTM_ID && (
           <GoogleTagManager gtmId={process.env.NEXT_PUBLIC_GTM_ID} />
-        )}
+        )} */}
         {/* GTM noscript fallback */}
-        <noscript>
+        {/* <noscript>
           <iframe
             src={`${process.env.NEXT_PUBLIC_TAG_SERVER}/ns.html?id=${process.env.NEXT_PUBLIC_GTM_ID}`}
             height="0"
             width="0"
             style={{ display: "none", visibility: "hidden" }}
           ></iframe>
-        </noscript>
+        </noscript> */}
       </body>
     </html>
   );
