@@ -224,10 +224,10 @@ const Footer = function Footer({ business }: FooterProps) {
                 />
               </a>
             </div>
-            <div className='flex gap-2 text-sm text-white dark:text-gray-200'>
+            {/* <div className='flex gap-2 text-sm text-white dark:text-gray-200'>
               <span className='font-semibold'>Trade License Number:</span>
               <span>TRAD/DNCC/050278/2022</span>
-            </div>
+            </div> */}
           </div>
 
           <div className='w-full mt-7 border-t border-gray-800 pt-6 md:mb-0 mb-20'>
