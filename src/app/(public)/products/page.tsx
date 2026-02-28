@@ -1,11 +1,9 @@
-// app/(public)/products/page.tsx
 "use server";
 import React from "react";
 import { publicApi } from "@/lib/api/publicApi";
 import { makeStore } from "@/lib/store";
 import type { Product } from "@/types/product";
-import ShopAllProducts from "./_components/ShopAllProducts";
-
+import ClientWrapper from "./ClientWrapper"; // import the client wrapper
 
 type SearchParams = {
   search?: string;
@@ -14,28 +12,7 @@ type SearchParams = {
   minPrice?: string;
   maxPrice?: string;
   condition?: string;
-  category?: string;
-  name?: string;
 };
-
-export async function generateMetadata({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const { category, name } = await searchParams;
-  const title = name ? `${decodeURIComponent(name)} Products | Glamgirl` : "Shop All Products | Glamgirl";
-  const description = name
-    ? `Browse our collection of ${decodeURIComponent(name).toLowerCase()} products on Glamgirl.`
-    : "Browse all products available on Glamgirl and find the best offers.";
-
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      url: "/products",
-      type: "website",
-    },
-  } as const;
-}
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const {
@@ -45,53 +22,51 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
     minPrice,
     maxPrice,
     condition,
-    category,
   } = await searchParams ?? {};
 
   const store = makeStore();
   const allProducts: Product[] = [];
 
-  let page = 1;
-  const limit = 500;
-  const maxPages = 10;
+  // Only fetch first page with smaller limit for initial load
+  const res = await store.dispatch(
+    publicApi.endpoints.getProducts.initiate({
+      page: 1,
+      limit: 200,
+      // Reduced from 500, only load first page initially
+      ...(search && { search }),
+      ...(sort && { sort }),
+      ...(brand && { brand }),
+      ...(minPrice && { minPrice }),
+      ...(maxPrice && { maxPrice }),
+      ...(condition && { condition }),
+    })
+  );
 
-  while (page <= maxPages) {
-    const res = await store.dispatch(
-      publicApi.endpoints.getProducts.initiate({
-        page,
-        limit,
-        ...(search && { search }),
-        ...(sort && { sort }),
-        ...(brand && { brand }),
-        ...(minPrice && { minPrice }),
-        ...(maxPrice && { maxPrice }),
-        ...(condition && { condition }),
-      })
-    );
-
-    const products: Product[] = res.data ?? [];
-    if (products.length === 0) break;
-
-    allProducts.push(...products);
-    page += 1;
-  }
+  const products: Product[] = res.data ?? [];
+  allProducts.push(...products);
 
   const initialProducts = JSON.parse(JSON.stringify(allProducts));
 
+  // Fetch filter options on server to prevent hydration mismatch
+  const filterOptionsRes = await store.dispatch(
+    publicApi.endpoints.getFilterOptions.initiate({
+      isCategories: true,
+      isPriceRange: true,
+      isVariantsValues: true,
+      isConditions: true,
+      isTags: true,
+    })
+  );
+
+  const initialFilterOptions = filterOptionsRes.data;
+
+  // Render client wrapper
   return (
-    <ShopAllProducts
+    <ClientWrapper
       initialProducts={initialProducts}
       minPrice={minPrice ? Number(minPrice) : undefined}
       maxPrice={maxPrice ? Number(maxPrice) : undefined}
-      initialSearchParams={{
-        search,
-        sort,
-        brand,
-        minPrice,
-        maxPrice,
-        condition,
-        category,
-      }}
+      initialFilterOptions={initialFilterOptions}
     />
   );
 }

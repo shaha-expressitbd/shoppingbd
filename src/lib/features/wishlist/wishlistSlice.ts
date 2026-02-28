@@ -5,13 +5,20 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 /* ————————————————————— Types —————————————————————— */
+import { VariantGroup } from "../../../types/product";
+
 export interface WishlistItem {
-  _id: string;
+  _id: string; // variantId for variants, productId for non-variants (main identifier)
+  productId: string; // NEW: Always the main product ID for cart consistency
+  variantId?: string; // exists only for variants (for easy differentiation)
   name: string;
   price: number;
+  sellingPrice: number;
   currency?: string;
-  image: string; // relative or absolute URL
-  variantValues: string[]; // e.g. ["L", "Blue"]
+  image: string;
+  variantValues: string[];
+  variantGroups?: VariantGroup[];
+  isDiscountActive: boolean;
 }
 
 interface WishlistState {
@@ -21,7 +28,10 @@ interface WishlistState {
 
 /* —————————————————— Initial State ————————————————— */
 const initialState: WishlistState = {
-  items: [],
+  items:
+    typeof window !== "undefined"
+      ? JSON.parse(localStorage.getItem("wishlist") || "[]")
+      : [],
   isOpen: false,
 };
 
@@ -37,15 +47,73 @@ const wishlistSlice = createSlice({
       state.isOpen = false;
     },
     addItem(state, action: PayloadAction<WishlistItem>) {
-      if (!state.items.find((i) => i._id === action.payload._id)) {
-        state.items.push(action.payload);
+      const newItem = action.payload;
+
+      // console.log("❤️ WISHLIST ADD ITEM:", {
+      //   _id: newItem._id,
+      //   productId: newItem.productId, // NEW log
+      //   variantId: newItem.variantId,
+      //   name: newItem.name,
+      //   price: newItem.price,
+      //   currency: newItem.currency,
+      //   image: newItem.image,
+      //   variantValues: newItem.variantValues,
+      //   action: "addItem",
+      // });
+
+      // Check for uniqueness by _id (variantId for variants, productId for non-variants)
+      const exists = state.items.some((i) => i._id === newItem._id);
+
+      if (!exists) {
+        state.items.push({
+          ...action.payload,
+          variantGroups: action.payload.variantGroups,
+        });
+        localStorage.setItem("wishlist", JSON.stringify(state.items));
+        // console.log("➕ WISHLIST ITEM ADDED:", {
+        //   _id: newItem._id,
+        //   productId: newItem.productId, // NEW log
+        //   variantId: newItem.variantId,
+        //   name: newItem.name,
+        //   totalItems: state.items.length,
+        //   action: "item_added",
+        // });
+        // } else {
+        //   console.log("⚠️ WISHLIST ITEM EXISTS - SKIPPED:", {
+        //     _id: newItem._id,
+        //     productId: newItem.productId, // NEW log
+        //     variantId: newItem.variantId,
+        //     name: newItem.name,
+        //     action: "duplicate_skipped",
+        //   });
       }
     },
     removeItem(state, action: PayloadAction<string>) {
-      state.items = state.items.filter((i) => i._id !== action.payload);
+      // Remove by _id (variantId for variants, productId for non-variants)
+      const itemId = action.payload;
+      const itemToRemove = state.items.find((i) => i._id === itemId);
+
+      // console.log("🗑️ WISHLIST REMOVE ITEM:", {
+      //   itemId: itemId,
+      //   itemFound: !!itemToRemove,
+      //   itemName: itemToRemove?.name,
+      //   itemProductId: itemToRemove?.productId, // NEW log
+      //   itemVariantId: itemToRemove?.variantId,
+      //   action: "removeItem",
+      // });
+
+      state.items = state.items.filter((i) => i._id !== itemId);
+      localStorage.setItem("wishlist", JSON.stringify(state.items));
+
+      // console.log("✅ WISHLIST ITEM REMOVED:", {
+      //   removedItemId: itemId,
+      //   newTotalItems: state.items.length,
+      //   action: "item_removed",
+      // });
     },
     clearWishlist(state) {
       state.items = [];
+      localStorage.removeItem("wishlist");
     },
   },
 });

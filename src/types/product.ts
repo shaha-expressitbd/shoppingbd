@@ -1,3 +1,4 @@
+// Product Types (from pasted document)
 import { MetaResponse } from "./metaResponse";
 
 export interface ProductResponse {
@@ -23,29 +24,36 @@ export interface Product {
   sizeGuard?: {
     _id: string;
     name: string;
+    headers?: string[];
+    table?: string[][];
   };
   sub_category: {
     _id: string;
     name: string;
   }[];
-  total_stock: number;
-  total_sold: number;
-  createdAt?: string;
-  hasVariants: boolean;
-  variantsId: Variant[];
-  currency: string;
-  isPublish: boolean;
-  selling_price: number;
-  category_group: {
+  category_group?: {
     _id: string;
     name: string;
   }[];
+  main_category?: {
+    _id: string;
+    name: string;
+  }[];
+  total_stock: number;
+  total_sold: number;
+  hasVariants: boolean;
+  variantsId: Variant[];
+  variantsGroup: VariantGroup[];
+  business_category_group?: any;
+  currency: string;
+  search_keywords?: string[];
+  isPublish: boolean;
   isPreOrder?: boolean;
-  offer_price?: number | string;
-  discount_start_date?: string;
-  discount_end_date?: string;
-  condition: string;
+  selling_price: number;
+  finalPrice: number;
+  related_products: Product[];
 }
+
 export interface Image {
   _id: string;
   image: {
@@ -80,6 +88,7 @@ export interface Variant {
   barcode: string;
   sku: string;
   selling_price: string;
+  finalPrice: number;
   condition: string;
   discount_type: string | null;
   discount_percent: string;
@@ -92,4 +101,10 @@ export interface Variant {
   total_sold: number;
   isPublish: boolean;
   isPreOrder: boolean;
+  isDiscountActive: boolean;
+}
+
+export interface VariantGroup {
+  variantName: string;
+  variantValue: string[];
 }

@@ -107,7 +107,7 @@ export async function getProductsServer({
   maxPrice,
   condition,
   page = 1,
-  limit = 20,
+  limit = 200,
   category,
 }: SearchParams = {}): Promise<Product[]> {
   if (process.env.NODE_ENV === "development") {

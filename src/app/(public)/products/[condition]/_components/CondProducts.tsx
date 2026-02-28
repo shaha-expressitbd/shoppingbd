@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import ConditionTabBar from "./ConditionTabBar";
 import ProductGrid from "./ProductGrid";
 import { useGetProductsQuery } from "@/lib/api/publicApi";
-import ProductGridSkeleton from "@/components/skeleton/ProductGridSkeleton";
+import ProductGridSkeleton from "@/components/ui/skeleton/ProductGridSkeleton";
 
 const productConditionOptions = [
   { value: "best", label: "Best" },

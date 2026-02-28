@@ -1,93 +1,107 @@
 "use client";
 
-import React, { useMemo, useEffect } from "react";
-import type { Product, Variant } from "@/types/product";
-import ProductCard from "./ui/organisms/product-card";
-import { useGetProductsQuery } from "@/lib/api/publicApi";
+import type { Product } from "@/types/product";
 import {
-  buildGtmItem,
-  trackViewRelatedItemList,
+  trackViewRelatedItemList
 } from "@/utils/gtm";
-import { LoadingSpinner } from "./ui/atoms/loading-spinner";
-
+import { useEffect, useMemo, useRef, useState } from "react";
+import ProductCard from "./ui/organisms/product-card";
 
 interface RelatedProductsProps {
   currentProductId: string;
   subCategoryId: string;
+  preloadedRelatedProducts: Product[];
 }
 
 export default function RelatedProducts({
   currentProductId,
   subCategoryId,
+  preloadedRelatedProducts,
 }: RelatedProductsProps) {
-  const {
-    data: allProducts = [],
-    isLoading,
-    isError,
-  } = useGetProductsQuery({ limit: 50 });
+  const [isVisible, setIsVisible] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
 
-  const related = useMemo(
-    () =>
-      allProducts.filter(
-        (p: Product) =>
-          p._id !== currentProductId &&
-          p.sub_category.some((sc) => sc._id === subCategoryId)
-      ),
-    [allProducts, currentProductId, subCategoryId]
-  );
-
+  // Intersection Observer for lazy loading
   useEffect(() => {
-    if (related.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        }
+      },
+      {
+        rootMargin: "200px",
+        threshold: 0.1,
+      }
+    );
 
-    const productsForTracking = related.slice(0, 4).map((p: Product, idx) => {
-      const firstVariant = p.variantsId?.[0];
-      return buildGtmItem(
-        p,
-        firstVariant,
-        1,
-        "Related Products",
-        subCategoryId,
-        idx + 1
-      );
-    });
+    const currentRef = sectionRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
 
-    trackViewRelatedItemList(productsForTracking, subCategoryId);
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, []);
+
+  // Filter related products to exclude the current product and match subCategoryId
+  const related = useMemo(() => {
+    return preloadedRelatedProducts.filter(
+      (p: Product) =>
+        p._id !== currentProductId &&
+        p.sub_category.some((sc) => sc._id === subCategoryId)
+    );
+  }, [preloadedRelatedProducts, currentProductId, subCategoryId]);
+
+  // Track related products for analytics
+  useEffect(() => {
+    // Pass products directly - trackViewRelatedItemList handles the GTM item mapping internally now
+    trackViewRelatedItemList(related.slice(0, 4), subCategoryId);
   }, [related, subCategoryId]);
 
-  /* 🌀 Loading spinner */
-  if (isLoading) {
+  // Show placeholder until section is visible
+  if (!isVisible) {
     return (
-      <div className="flex justify-center items-center min-h-[160px]">
-        <LoadingSpinner size="lg" color="red" />
-      </div>
+      <section ref={sectionRef}>
+        <div className="py-2 text-3xl text-center mb-4">
+          <div className="inline-flex gap-2 items-center">
+            <p className="text-gray-500 dark:text-white">
+              RELATED<span className="text-gray-700 dark:text-white font-medium">PRODUCTS</span>
+            </p>
+            <p className="w-8 sm:w-12 h-0.5 bg-gray-700 dark:bg-white"></p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-10 opacity-30">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <div key={idx} className="bg-gray-100 dark:bg-gray-800 rounded-lg h-64 animate-pulse" />
+          ))}
+        </div>
+      </section>
     );
   }
 
-  if (isError) return null;
   if (related.length === 0) return null;
 
   return (
-    <section>
-      <div className="relative mb-4 md:mb-6 text-center">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight">
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
-            Related Products
-          </span>
-        </h1>
-        <div className="h-1.5 bg-gradient-to-r from-red-50/5 via-primary to-red-50/5 mt-2 w-52 md:w-80 mx-auto rounded-full" />
+    <section ref={sectionRef}>
+      <div className="py-2 text-3xl text-center mb-4">
+        <div className="inline-flex gap-2 items-center">
+          <p className="text-gray-500 dark:text-white">
+            RELATED<span className="text-gray-700 dark:text-white font-medium">PRODUCTS</span>
+          </p>
+          <p className="w-8 sm:w-12 h-0.5 bg-gray-700 dark:bg-white"></p>
+        </div>
       </div>
-
-      {/* product grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-10">
-        {related.map((product: Product, idx: number) => {
-          if (idx >= 4) return null;
-          const visibility = idx <= 3 ? "" : "hidden lg:block";
-          return (
-            <div key={product._id} className={visibility}>
-              <ProductCard product={product} />
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-10 animate-in fade-in duration-500">
+        {related.slice(0, 4).map((product: Product, idx: number) => (
+          <div key={product._id}>
+            <ProductCard product={product} />
+          </div>
+        ))}
       </div>
     </section>
   );

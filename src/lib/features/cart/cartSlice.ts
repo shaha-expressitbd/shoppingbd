@@ -1,26 +1,23 @@
 // src/lib/features/cart/cartSlice.ts
-import { Variant } from "./../../../types/product";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "../../store";
+import { VariantGroup } from "../../../types/product";
 
 /* ───── item টাইপে আগেই variantId ছিল ───── */
-// src/lib/features/cart/cartSlice.ts
 export interface TCartItem {
-  productId: string;
   _id: string; // productId
   variantId?: string;
   variantLabel?: string;
   name: string;
-  price: number; // This will store the effective price (offerPrice if active, else sellingPrice)
-  sellingPrice: number; // Add sellingPrice
-  offerPrice?: number; // Add offerPrice
-  isWithinOffer: boolean; // Add flag to indicate if offer is active
+  price: number; // Effective price (offer if active)
+  sellingPrice: number; // Original price
+  isDiscountActive: boolean; // Flag for active discount
   image: string;
   quantity: number;
   maxStock: number;
   currency?: string;
   variantValues: string[];
-  isPreOrder?: boolean;
+  variantGroups?: VariantGroup[];
 }
 
 interface CartState {
@@ -40,29 +37,80 @@ const cartSlice = createSlice({
   initialState,
   reducers: {
     /* ───────── addItem ───────── */
-    // src/lib/features/cart/cartSlice.ts
     addItem: (state, action: PayloadAction<TCartItem>) => {
       const incoming = action.payload;
+
+      // console.log("🛒 CART ADD ITEM:", {
+      //   _id: incoming._id,
+      //   variantId: incoming.variantId,
+      //   variantLabel: incoming.variantLabel,
+      //   name: incoming.name,
+      //   price: incoming.price,
+      //   sellingPrice: incoming.sellingPrice,
+      //   offerPrice: incoming.offerPrice,
+      //   isWithinOffer: incoming.isWithinOffer,
+      //   currency: incoming.currency,
+      //   image: incoming.image,
+      //   incomingQuantity: incoming.quantity,
+      //   maxStock: incoming.maxStock,
+      //   variantValues: incoming.variantValues,
+      //   action: "addItem",
+      // });
+
+      // 🔸 productId + variantId দুটো মিলিয়ে খুঁজছি
       const existing = state.items.find(
         (item) =>
           item._id === incoming._id && item.variantId === incoming.variantId
       );
 
       if (existing) {
+        const previousQuantity = existing.quantity;
         existing.quantity = Math.min(
           existing.quantity + incoming.quantity,
           existing.maxStock
         );
+        // Preserve offer information when merging
+        if (incoming.sellingPrice !== undefined)
+          existing.sellingPrice = incoming.sellingPrice;
+        if (incoming.isDiscountActive !== undefined)
+          existing.isDiscountActive = incoming.isDiscountActive;
+        if (incoming.price !== undefined) existing.price = incoming.price; // Update price if different
       } else {
-        state.items.push({
+        const newItem = {
           ...incoming,
           quantity: Math.min(incoming.quantity, incoming.maxStock),
           variantValues: incoming.variantValues,
-          sellingPrice: incoming.sellingPrice, // Ensure sellingPrice is stored
-          offerPrice: incoming.offerPrice, // Ensure offerPrice is stored
-          isWithinOffer: incoming.isWithinOffer, // Ensure isWithinOffer is stored
+        };
+        state.items.push({
+          ...newItem,
+          variantGroups: incoming.variantGroups,
         });
+        // console.log("➕ CART ITEM ADDED NEW:", {
+        //   _id: newItem._id,
+        //   variantId: newItem.variantId,
+        //   name: newItem.name,
+        //   quantity: newItem.quantity,
+        //   variantValues: newItem.variantValues,
+        //   action: "add_new",
+        // });
       }
+
+      // console.log("📊 CART STATE UPDATED:", {
+      //   totalItems: state.items.length,
+      //   totalQuantity: state.items.reduce(
+      //     (sum, item) => sum + item.quantity,
+      //     0
+      //   ),
+      //   lastItem: {
+      //     _id: incoming._id,
+      //     variantId: incoming.variantId,
+      //     name: incoming.name,
+      //     finalQuantity: state.items.find(
+      //       (item) =>
+      //         item._id === incoming._id && item.variantId === incoming.variantId
+      //     )?.quantity,
+      //   },
+      // });
     },
 
     /* ───────── removeItem ───────── */

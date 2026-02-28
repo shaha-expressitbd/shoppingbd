@@ -3,20 +3,28 @@
 import { publicApi } from "@/lib/api/publicApi";
 import { makeStore } from "@/lib/store";
 import { stripHtml } from "@/utils/stripHTML";
-import { generateSlug } from "@/utils/slug"; // Only import generateSlug since extractIdFromSlug is not needed
+import { generateSlug } from "@/utils/slug";
 import { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { Suspense } from "react";
 import ProductDetail from "./product-details";
+import ProductPageSkeleton from "@/components/ui/skeleton/ProductPageSkeleton";
 import { Product } from "@/types/product";
 
 
-// Fetch product by ID
-async function getProductById(id: string): Promise<Product | null> {
+// Interface for getProductWithRelated response
+interface ProductWithRelated {
+  product: Product | null;
+  related_products: Product[];
+}
+
+// Fetch product and related products by ID
+async function getProductWithRelated(productId: string, relatedProductLimit: number = 8): Promise<ProductWithRelated | null> {
   const store = makeStore();
   const res = await store.dispatch(
-    publicApi.endpoints.getProducts.initiate({ _id: id })
+    publicApi.endpoints.getProductWithRelated.initiate({ productId, relatedProductLimit })
   );
-  return res.data?.[0] || null;
+  return res.data || null;
 }
 
 // Generate metadata for SEO
@@ -24,22 +32,24 @@ export async function generateMetadata({
   params,
   searchParams,
 }: {
-  params: { slug: string };
-  searchParams: { id?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ id?: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
-  const { id } = await searchParams;
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
 
-  console.log("Metadata - Slug:", slug, "ID:", id);
+  // console.log("Metadata - Slug:", resolvedParams.slug, "ID:", resolvedSearchParams.id);
 
-  if (!id) {
+  if (!resolvedSearchParams.id) {
     return {
       title: "পণ্য পাওয়া যায়নি",
       description: "কোনো পণ্য পাওয়া যায়নি।",
     };
   }
 
-  const product = await getProductById(id);
+  const data = await getProductWithRelated(resolvedSearchParams.id);
+  const product = data?.product;
+
   if (!product) {
     return {
       title: "পণ্য পাওয়া যায়নি",
@@ -47,20 +57,20 @@ export async function generateMetadata({
     };
   }
 
-  const siteImageUrl = process.env.NEXT_PUBLIC_IMAGE_URL || "";
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://emegadeal.com";
-  const expectedSlug = generateSlug(product.name, product._id);
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://shoppersbd.com";
+  const expectedSlug = generateSlug(product.name, product._id); // Use generateSlug from utils/slug.ts
   const canonicalUrl = `${baseUrl}/product/${expectedSlug}`;
 
   const rawDescription = product.short_description || "পণ্যের বিস্তারিত বিবরণ দেখুন";
   const cleanedDescription = stripHtml(rawDescription);
 
   const firstImg = product.images?.[0]?.alterImage?.secure_url
-    ? `${siteImageUrl}${product.images[0].alterImage.secure_url}`
-    : `${siteImageUrl}/fallback-image.jpg`;
+    ? product.images[0].alterImage.secure_url
+    : "/assets/fallback.jpg";
 
   return {
-    title: `${product.name} | Emegadeal`,
+    title: `${product.name} | shoppersbd`,
     description: cleanedDescription,
     alternates: { canonical: canonicalUrl },
     openGraph: {
@@ -79,7 +89,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      site: baseUrl?.replace(/^https?:\/\//, ""),
+      site: baseUrl.replace(/^https?:\/\//, ""),
       title: product.name,
       description: cleanedDescription,
       images: [firstImg],
@@ -92,38 +102,45 @@ export default async function ProductPage({
   params,
   searchParams,
 }: {
-  params: { slug: string };
-  searchParams: { id?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ id?: string }>;
 }) {
-  const { slug } = await params;
-  const { id } = await searchParams;
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
 
-  console.log("ProductPage - Slug:", slug, "ID:", id);
+  console.log("ProductPage - Slug:", resolvedParams.slug, "ID:", resolvedSearchParams.id);
 
-  // Check if id is provided
-  if (!id) {
+  if (!resolvedSearchParams.id) {
     console.error("No product ID provided in query parameters");
     return notFound();
   }
 
-  // Fetch product by ID
-  const product = await getProductById(id);
+  const data = await getProductWithRelated(resolvedSearchParams.id);
+  const product = data?.product;
+
   if (!product) {
-    console.error("Product not found for ID:", id);
+    console.error("Product not found for ID:", resolvedSearchParams.id);
     return notFound();
   }
 
-  // Generate the expected slug
-  const expectedSlug = generateSlug(product.name, product._id);
+  const expectedSlug = generateSlug(product.name, product._id); // Use generateSlug from utils/slug.ts
+  const cleanSlug = resolvedParams.slug.split("?")[0]; // Remove query params from provided slug
+  const cleanExpectedSlug = expectedSlug.split("?")[0]; // Remove query params from expected slug
 
-  // Remove query parameter part for comparison
-  const cleanSlug = slug.split("?")[0];
-  const cleanExpectedSlug = expectedSlug.split("?")[0];
-
-  // Redirect if the slug doesn't match to prevent duplicate content
   if (cleanSlug !== cleanExpectedSlug) {
     redirect(`/product/${expectedSlug}`);
   }
 
-  return <ProductDetail product={product} />;
+  return (
+    <div className="bg-secondary dark:bg-secondary">
+      <Suspense fallback={<ProductPageSkeleton />}>
+        <ProductDetail
+          product={product}
+          key={product._id}
+          relatedProducts={data?.related_products || []}
+          subCategoryId={product.sub_category[0]?._id || ""}
+        />
+      </Suspense>
+    </div>
+  );
 }

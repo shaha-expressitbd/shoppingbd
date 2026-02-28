@@ -64,7 +64,7 @@ export function LiveViews({
     }, [maxIncrement, minIntervalMs, maxIntervalMs]);
 
     return (
-        <span className="px-2 flex items-center text-red-500 text-sm bg-gray-100 rounded-full">
+        <span className="px-2 flex items-center font-semibold text-primary dark:text-black text-sm bg-gray-100 rounded-full">
             <FiEye className="w-3 h-3 mr-1" />
             {formatCount(count)}
             {/* only show the text on md+ screens */}

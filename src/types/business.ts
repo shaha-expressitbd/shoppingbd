@@ -1,9 +1,4 @@
-export interface MetaResponse {
-  page: number;
-  limit: number;
-  totalData: number;
-  totalPage: number;
-}
+import { MetaResponse } from "./metaResponse";
 
 export interface BusinessResponse {
   status: number;
@@ -21,18 +16,14 @@ export interface Image {
   public_id: string;
   secure_url: string;
   optimizeUrl: string;
-  alterImage?: {
-    secure_url: string;
-  };
 }
 
 export interface Category {
   _id: string;
   name: string;
   children: Category[];
-  image?: Image;
+  products?: number;
 }
-
 export interface SSLPaymentMethod {
   name: string;
   logo: string;
@@ -54,6 +45,7 @@ export interface Business {
   website: string;
   socialMedia: string;
   logo: Image;
+  alterImage: Image;
   insideDhaka: number;
   outsideDhaka: number;
   subDhaka: number;

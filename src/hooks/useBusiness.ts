@@ -1,3 +1,4 @@
+// src/hooks/useBusiness.ts
 import { useGetBusinessQuery } from "@/lib/api/publicApi";
 import {
   setBusiness,
@@ -17,6 +18,7 @@ export const useBusiness = () => {
     isFetching,
   } = useGetBusinessQuery();
 
+  // Memoize the dispatch actions to prevent unnecessary effect triggers
   const memoizedActions = useMemo(
     () => ({
       setLoading: () => dispatch(setLoading()),
@@ -38,6 +40,7 @@ export const useBusiness = () => {
     }
   }, [businessData, isLoading, error, memoizedActions]);
 
+  // Memoize the returned object to maintain referential equality
   return useMemo(
     () => ({
       businessData,

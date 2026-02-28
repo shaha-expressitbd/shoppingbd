@@ -1,26 +1,31 @@
 // app/[id]/page.tsx
-'use server'
-import React from 'react'
-import { publicApi } from '@/lib/api/publicApi'
-import { makeStore } from '@/lib/store'
-import { Product } from '@/types/product'
-import CategoryProductsPage from './_components/CategoryProductsPage'
+import { getProductsServer } from '@/lib/api/serverApi';
+import { Product } from '@/types/product';
+import CategoryProductsPage from './_components/CategoryProductsPage';
 
+interface PageProps {
+    params: Promise<{ id: string }>;
+}
 
-export default async function Page() {
-    const store = makeStore()
-    const res = await store.dispatch(
-        publicApi.endpoints.getProducts.initiate({ page: 1, limit: 1000 })
-    )
-    //console.log(res)
-    const initialProducts: Product[] = res.data
-        ? JSON.parse(JSON.stringify(res.data))
-        : []
+export default async function Page({ params }: PageProps) {
+    const { id } = await params;
+    const category = decodeURIComponent(id);
+    console.log('Category ID:', category);
+    let initialProducts: Product[] = [];
+    let error: string | undefined;
+    console.log('Initial Products:', initialProducts);
+    try {
+        // Fetch products server-side with category filter
+        initialProducts = await getProductsServer({
+            page: 1,
+            limit: 2000,
+            category, // Pass category for filtering
+            sort: '-updatedAt',
+        });
 
-    return (
-        <CategoryProductsPage
-            initialProducts={initialProducts}
-        // category={decodeURIComponent(params.id)}
-        />
-    )
+    } catch (err) {
+        console.error('Error fetching products:', err);
+        error = 'Failed to load products';
+    }
+    return <CategoryProductsPage initialProducts={initialProducts} category={category} error={error} />;
 }

@@ -1,6 +1,8 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "@/lib/store";
 
+import { VariantGroup } from "../../../types/product";
+
 export interface TPreorderCartItem {
   _id: string;
   name: string;
@@ -9,6 +11,7 @@ export interface TPreorderCartItem {
   quantity: number;
   maxStock: number;
   variantValues?: string[];
+  variantGroups?: VariantGroup[];
   variantId?: string;
   isPreOrder: boolean;
   currency: string;
@@ -31,10 +34,27 @@ const preorderCartSlice = createSlice({
   initialState,
   reducers: {
     setPreorderItem: (state, action: PayloadAction<TPreorderCartItem>) => {
+      // Debug: Log preorder item being set
+      if (process.env.NODE_ENV === "development") {
+        console.log("🔍 PreOrderCartSlice setPreorderItem:", {
+          itemId: action.payload._id,
+          itemName: action.payload.name,
+          itemPrice: action.payload.price,
+          itemPriceType: typeof action.payload.price,
+          itemPriceIsNaN: isNaN(action.payload.price),
+          itemPriceIsZero: action.payload.price === 0,
+          itemQuantity: action.payload.quantity,
+          itemVariantValues: action.payload.variantValues,
+        });
+      }
       state.item = action.payload;
       state.isOpen = true;
     },
     clearPreorderCart: (state) => {
+      // Debug logging (only in development)
+      if (process.env.NODE_ENV === "development") {
+        console.log("🛒 CLEARING PREORDER CART STATE");
+      }
       state.item = null;
       state.discount = 0;
       state.isOpen = false;

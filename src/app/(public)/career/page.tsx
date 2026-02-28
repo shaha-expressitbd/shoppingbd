@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Careers | Dress Express',
+    title: 'Careers | G\'Lore',
     description:
         'Join our team and build the future of e-commerce in Bangladesh. Explore exciting career opportunities.',
 };
@@ -200,7 +200,7 @@ export default function CareersPage() {
 
                         <div className="flex flex-wrap justify-center gap-4">
                             <a
-                                href="mailto:careers@dressexpress.com"
+                                href="mailto:careers@shoppersbd.com"
                                 className="bg-white text-red-600 hover:bg-red-50 dark:hover:bg-red-700 px-6 py-3 rounded-lg font-semibold transition-colors duration-300 flex items-center gap-2 text-sm "
                             >
                                 <svg
@@ -216,11 +216,11 @@ export default function CareersPage() {
                                         d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                                     />
                                 </svg>
-                                careers@dressexpress.com
+                                careers@shoppersbd.com
                             </a>
 
                             <a
-                                href="tel:+8801855375963"
+                                href="tel:+8801322414142"
                                 className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-300 flex items-center gap-2 text-sm "
                             >
                                 <svg

@@ -15,5 +15,4 @@ export interface TCartItem {
   currency?: string;
   variantValues?: string[];
   variantLabel?: string;
-  isPreOrder?: boolean;
 }

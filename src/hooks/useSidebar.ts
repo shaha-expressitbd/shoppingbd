@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useMediaQuery } from "react-responsive";
-import { closeSidebar, openSidebar } from "../lib/features/sidebar/sidebarSlice";
+import {
+  closeSidebar,
+  openSidebar,
+} from "../lib/features/sidebar/sidebarSlice";
 import { RootState } from "../lib/store";
 
 export const useSidebar = () => {
@@ -9,16 +12,6 @@ export const useSidebar = () => {
   const isSidebarOpen = useSelector((state: RootState) => state.sidebar.isOpen);
   const isDesktop = useMediaQuery({ minWidth: 1536 });
   const [isManualToggle, setIsManualToggle] = useState(false);
-
-  useEffect(() => {
-    if (!isManualToggle) {
-      if (isDesktop) {
-        dispatch(openSidebar());
-      } else {
-        dispatch(closeSidebar());
-      }
-    }
-  }, [isDesktop, dispatch, isManualToggle]);
 
   useEffect(() => {
     setIsManualToggle(false);

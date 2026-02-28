@@ -16,10 +16,10 @@ export const revalidate = 0; // Disable cache
 
 export async function generateMetadata() {
     return {
-        title: 'Flash Deals | Dress Express',
+        title: 'Flash Deals | G\'Lore',
         description: 'Enjoy limited-time flash deals on discount products.',
         openGraph: {
-            title: 'Flash Deals | Dress Express',
+            title: 'Flash Deals | G\'Lore',
             description: 'Enjoy limited-time flash deals on discount products.',
             url: '/flash-deals',
             type: 'website',
@@ -33,7 +33,7 @@ export default async function Page({
     searchParams: Promise<SearchParams>;
 }) {
     // Await the searchParams promise
-    const { page = '1', limit = '1000' } = await searchParams ?? {};
+    const { page = '1', limit = '200' } = await searchParams ?? {};
 
     const store = makeStore();
 

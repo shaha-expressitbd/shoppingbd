@@ -14,52 +14,32 @@ import { baseApi } from "./api/baseApi";
 import { publicApi } from "./api/publicApi";
 
 import authReducer from "./features/auth/authSlice";
+import businessReducer from "./features/business/businessSlice";
 import cartReducer from "./features/cart/cartSlice";
 import preorderCartReducer from "./features/preOrderCartSlice/preOrderCartSlice";
 import sidebarReducer from "./features/sidebar/sidebarSlice";
 import themeReducer from "./features/theme/themeSlice";
 import { wishlistReducer } from "./features/wishlist/wishlistSlice";
+import { recentlyViewedReducer } from "./features/recentlyViewedSlice";
 /* 1️⃣  কম্বাইন্ড রিডিউসার */
 
 const combinedReducer = combineReducers({
   [baseApi.reducerPath]: baseApi.reducer,
   [publicApi.reducerPath]: publicApi.reducer,
-
   auth: authReducer,
+  business: businessReducer,
   cart: cartReducer,
   preorderCart: preorderCartReducer,
   sidebar: sidebarReducer,
   theme: themeReducer,
   wishlist: wishlistReducer,
+  recentlyViewed: recentlyViewedReducer,
 });
 
 /* Next.js hydration guard */
 const rootReducer = (state: any, action: any) => {
-  // Get the initial state structure to know valid keys
-  const initialState = combinedReducer(undefined, { type: "@@INIT" });
-  const knownKeys = Object.keys(initialState);
-
-  let newState;
-  if (action.type === HYDRATE || action.type === REHYDRATE) {
-    // Filter action.payload to only include known keys (only if payload exists)
-    const filteredPayload = action.payload
-      ? Object.fromEntries(
-          Object.entries(action.payload).filter(([key]) =>
-            knownKeys.includes(key)
-          )
-        )
-      : {};
-    newState = { ...state, ...filteredPayload };
-  } else {
-    newState = combinedReducer(state, action);
-  }
-
-  // Always filter the resulting state to remove any unexpected keys
-  if (!newState) return combinedReducer(undefined, { type: "@@INIT" });
-
-  return Object.fromEntries(
-    Object.entries(newState).filter(([key]) => knownKeys.includes(key))
-  ) as ReturnType<typeof combinedReducer>;
+  if (action.type === HYDRATE) return { ...state, ...action.payload };
+  return combinedReducer(state, action);
 };
 
 /* 2️⃣  redux‑persist শুধু ব্রাউজারে অ্যাক্টিভ */
@@ -79,7 +59,14 @@ if (isBrowser) {
   const persistConfig = {
     key: "root",
     storage,
-    whitelist: ["auth", "theme", "cart", "preorderCart", "wishlist"],
+    whitelist: [
+      "auth",
+      "theme",
+      "cart",
+      "preorderCart",
+      "wishlist",
+      "recentlyViewed",
+    ],
   };
 
   finalReducer = persistReducer(persistConfig, rootReducer);

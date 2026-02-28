@@ -1,12 +1,22 @@
 // src/components/Header.tsx
-import { Navbar } from "./ui/organisms/navbar";
+import React from 'react';
+import { Navbar } from './ui/organisms/navbar';
+import ErrorBoundary from './ui/skeleton/ErrorBoundary';
+import { Business } from '@/types/business';
 
-export default function Header() {
+type HeaderProps = {
+  setShowSearch?: (value: boolean) => void;
+  business: Business;
+};
+
+const Header = async function Header({ setShowSearch, business }: HeaderProps) {
   return (
-
     <header className="sticky top-0 left-0 w-full z-50">
-      <Navbar />
-
+      <ErrorBoundary>
+        <Navbar business={business} />
+      </ErrorBoundary>
     </header>
   );
-}
+};
+
+export default Header;

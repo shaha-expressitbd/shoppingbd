@@ -3,8 +3,7 @@ import React, { useRef } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import 'swiper/css/pagination';
-import 'swiper/css/navigation';
-import { Autoplay, Pagination, Navigation } from 'swiper/modules';
+import { Autoplay, Pagination } from 'swiper/modules';
 import { useBusiness } from '@/hooks/useBusiness';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -34,39 +33,37 @@ export default function HeroSection() {
     }
   };
 
-
   return (
     <div className="">
-      <div className="relative w-full overflow-hidden h-[260px] md:h-[600px] lg:h-[600px] ">
+      <div className="relative w-full overflow-hidden h-[140px] md:h-[600px] lg:h-[600px]">
         <section className="w-full h-full">
           <Swiper
             spaceBetween={0}
             centeredSlides={true}
             autoplay={{ delay: 2500, disableOnInteraction: false }}
             pagination={{ clickable: true }}
-            navigation={true}
-            modules={[Autoplay, Pagination, Navigation]}
+            navigation={false}
+            modules={[Autoplay, Pagination]}
             onAutoplayTimeLeft={onAutoplayTimeLeft}
             className="mySwiper w-full h-full"
           >
             {[
-              { src: '/assets/banner/1.webp', alt: 'Hero Necklace' },
-              { src: '/assets/banner/2.webp', alt: 'Bracelet' },
-              { src: '/assets/banner/3.webp', alt: 'Earrings' },
-
+              { src: '/assets/durgapuja2.png', alt: 'durgapuja2' },
+              { src: '/assets/bkashbanner.png', alt: 'bkashbanner' },
             ].map((slide, index) => (
               <SwiperSlide key={index}>
-                <div className="relative w-full h-full flex flex-col md:flex-row items-center">
-                  <div className="w-full h-full">
+                <div className="relative w-full h-full flex flex-col md:flex-row items-center justify-center">
+                  <div className="w-full h-full flex-shrink-0">
                     <Image
                       src={slide.src}
                       alt={slide.alt}
-                      fill
-                      sizes="100vw"
+                      width={1900}
+                      height={600}
                       className="object-cover"
-                      priority={index === 0} // Priority for the first slide only
-                      quality={80} // Slightly reduced quality for faster loading
-                      loading={index === 0 ? 'eager' : 'lazy'} // Lazy load non-critical slides
+                      priority={true}
+                      quality={80}
+
+
                     />
                   </div>
                 </div>

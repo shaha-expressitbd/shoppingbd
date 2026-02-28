@@ -2,7 +2,6 @@
 
 import { useBusiness } from "@/hooks/useBusiness";
 import { formatCurrency } from "@/utils/formatCurrency";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -21,19 +20,21 @@ import { Button } from "../atoms/button";
 import { Sheet, SheetContent, SheetFooter } from "../molecules/sheet";
 import { useCart } from "@/hooks/useCart";
 import { useWishlist } from "@/hooks/useWishlist";
-import { FaHeart } from "react-icons/fa";
+import Image from "../atoms/image";
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                     */
 /* -------------------------------------------------------------------------- */
 interface TWishlistItem {
     _id: string;
-    productId: string;
     name: string;
     price: number;
+    sellingPrice: number;
     currency?: string;
     image: string;
     variantValues: string[];
+    variantGroups?: { variantName: string; variantValue: string[] }[];
+    isDiscountActive: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -50,8 +51,7 @@ function WishlistItemRow({
 }) {
     const src = item.image.startsWith("http")
         ? item.image
-        : `${process.env.NEXT_PUBLIC_IMAGE_URL}${item.image.startsWith("/") ? "" : "/"
-        }${item.image}`;
+        : item.image.startsWith("/") ? item.image : `/${item.image}`;
 
     /* stop bubbling so outside‑click handler never fires from these buttons */
     const stop = (e: React.MouseEvent | React.TouchEvent) => e.stopPropagation();
@@ -66,19 +66,46 @@ function WishlistItemRow({
                     fill
                     sizes="80px"
                     className="object-cover"
+                    variant="small"
                 />
             </div>
 
             {/* details */}
             <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2 break-all">
+                <h3 className="font-semibold text-red-500 dark:text-white line-clamp-2 break-all">
                     {item.name}
                 </h3>
+                <div>
+                    {item.variantValues?.length > 0 && (
+                        <div className="mt-1 text-sm text-red-500 dark:text-gray-400 flex flex-col gap-1">
+                            {item.variantGroups?.length
+                                ? item.variantValues.map((val, idx) => {
+                                    const groupName = item.variantGroups?.[idx]?.variantName || "";
+                                    return (
+                                        <span key={idx}>{groupName ? `${groupName}: ${val}` : val}</span>
+                                    );
+                                })
+                                : (
+                                    <span>Size — {item.variantValues.map((val, idx) => (
+                                        <span key={idx} className="block">{val}</span>
+                                    ))}</span>
+                                )}
+                        </div>
+                    )}
+                </div>
 
-                <div className="flex flex-wrap gap-x-2 text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                    <span>{formatCurrency(item.price, item.currency || "BDT")}</span>
-                    {item.variantValues.length > 0 && (
-                        <span className="truncate">{item.variantValues.join(" / ")}</span>
+                <div className="flex flex-wrap gap-x-2 text-sm text-gray-900 dark:text-gray-400 mt-0.5">
+                    {item.isDiscountActive && item.sellingPrice && item.sellingPrice > item.price ? (
+                        <div className="flex items-center gap-2">
+                            <span className="text-green-600 dark:text-green-400">
+                                {formatCurrency(item.price, item.currency || "BDT")}
+                            </span>
+                            <span className="line-through text-gray-500 dark:text-gray-400">
+                                {formatCurrency(item.sellingPrice, item.currency || "BDT")}
+                            </span>
+                        </div>
+                    ) : (
+                        <span>{formatCurrency(item.price, item.currency || "BDT")}</span>
                     )}
                 </div>
             </div>
@@ -103,7 +130,7 @@ function WishlistItemRow({
                     onMouseDown={stop}
                     onTouchStart={stop}
                     onClick={onMoveToCart}
-                    className="p-2 rounded-full bg-gradient-to-br from-primary to-red-600 text-white shadow-sm hover:shadow-md transition-all"
+                    className="p-2 rounded-full bg-red-800 text-white shadow-sm hover:shadow-md transition-all"
                     aria-label="Move to cart"
                 >
                     <FiShoppingCart className="w-4 h-4" />
@@ -130,6 +157,7 @@ export function WishlistSheet() {
         removeItem,
         moveToCart,
     } = useWishlist();
+
     const { openCart } = useCart();
 
     const [mounted, setMounted] = useState(false);
@@ -170,28 +198,27 @@ export function WishlistSheet() {
     const handleRemove = (id: string) => {
         removeItem(id);
         toast.success("Removed from wishlist", { duration: 700 });
-        closeWishlist(); // Close wishlist after removing item
     };
 
     const handleMove = (id: string) => {
         moveToCart(id);
+        closeWishlist();
         openCart();
-        closeWishlist(); // Close wishlist after moving item to cart
     };
 
-    // Rest of the component remains unchanged
     return (
         <>
             {/* trigger */}
+
+
             <Button
                 title="Wishlist"
                 variant="ghost"
                 onClick={handleOpen}
+
             >
                 <div className="relative">
-                    <div>
-                        <FaHeart className="w-7 h-8 text-pink-600" />
-                    </div>
+                    <FiHeart className="w-5 h-5 text-primary dark:text-primary  " />
 
                     {mounted && itemCount > 0 && (
                         <>
@@ -201,28 +228,32 @@ export function WishlistSheet() {
                                     initial={{ scale: 0, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
                                     exit={{ scale: 0, opacity: 0 }}
-                                    className="absolute -top-3 -right-3 bg-primary text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow ring-2 ring-white dark:ring-gray-800"
+                                    className="absolute -top-3 -right-3 md:top-3 bg-[#C43882] md:bg-[#C43882] text-white text-xs font-bold rounded-full  h-6 w-6 md:w-5 md:h-5 flex items-center justify-center  dark:ring-gray-800"
                                 >
                                     {itemCount > 9 ? "9+" : itemCount}
                                 </motion.span>
                             </AnimatePresence>
 
-                            <div className="absolute -top-4 -right-3 w-5 h-5 rounded-full bg-pink-700 animate-ping opacity-60" />
+                            <div className="absolute -top-3 -right-3 md:top-2 w-5 h-5 rounded-full bg-red-500 animate-ping opacity-60" />
                         </>
                     )}
                 </div>
             </Button>
 
+
+
+
+
             {/* sheet */}
             <Sheet isOpen={isOpen}>
-                <SheetContent className="flex flex-col h-screen sm:max-w-md bg-white dark:bg-gray-900 overflow-hidden">
+                <SheetContent className="flex flex-col h-screen w-full sm:max-w-sm md:max-w-md lg:max-w-lg bg-white dark:bg-gray-900 overflow-hidden">
                     <div ref={contentRef} className="flex flex-col flex-1 min-h-0">
                         {/* header */}
-                        <div className="relative px-5 py-5 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-b border-gray-200/50 dark:border-gray-700/50">
+                        <div className="relative px-5 py-5 bg-gradient-to-r from-red-50 to-red-50 dark:from-red-900/20 dark:to-red-900/20 border-b border-gray-200/50 dark:border-gray-700/50">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-xl bg-gradient-to-br from-pink-100 to-red-100 dark:from-pink-900/30 dark:to-red-900/30">
-                                        <FiHeart className="w-5 h-5 text-pink-600 dark:text-pink-400" />
+                                    <div className="p-2 rounded-xl bg-gradient-to-br from-red-100 to-red-100 dark:from-red-900/30 dark:to-red-900/30">
+                                        <FiHeart className="w-5 h-5 text-red-600 dark:text-red-400" />
                                     </div>
                                     <div>
                                         <h2 className="text-lg font-bold text-gray-900 dark:text-white">
@@ -253,8 +284,8 @@ export function WishlistSheet() {
                                     animate={{ opacity: 1, y: 0 }}
                                     className="flex flex-col items-center justify-center h-full gap-6 p-6 sm:p-8"
                                 >
-                                    <div className="p-6 rounded-3xl bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-900/30 dark:to-pink-900/30">
-                                        <FiHeart className="w-16 h-16 text-pink-400" />
+                                    <div className="p-6 rounded-3xl bg-gradient-to-br from-red-50 to-red-50 dark:from-red-900/30 dark:to-red-900/30">
+                                        <FiHeart className="w-16 h-16 text-red-400" />
                                     </div>
 
                                     <div className="text-center space-y-2">
@@ -308,35 +339,35 @@ export function WishlistSheet() {
                         </div>
 
                         {/* footer */}
-                        {items.length > 0 && (
-                            <motion.div
-                                initial={{ y: 20, opacity: 0 }}
-                                animate={{ y: 0, opacity: 1 }}
-                                className="border-t border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-t from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50"
-                            >
-                                <SheetFooter className="p-3 space-y-3">
-                                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                                        <Button
-                                            title="Continue Shopping"
-                                            variant="gradient"
-                                            size="sm"
-                                            onClick={closeWishlist}
-                                            className="group"
-                                        >
-                                            <FiArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-0.5 transition-transform" />
-                                            Continue shopping
-                                        </Button>
-                                    </motion.div>
 
-                                    <div className="flex items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                        <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center">
-                                            <div className="w-1 h-2 bg-white rounded-full" />
-                                        </div>
-                                        Secure SSL encrypted browsing
+                        <motion.div
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            className="border-t border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-t from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50"
+                        >
+                            <SheetFooter className="p-3 space-y-3">
+                                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                                    <Button
+                                        title="Continue Shopping"
+                                        variant="gradient"
+                                        size="sm"
+                                        onClick={closeWishlist}
+                                        className="bg-[#C43882] text-white group"
+                                    >
+                                        <FiArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-0.5 transition-transform" />
+                                        Continue shopping
+                                    </Button>
+                                </motion.div>
+
+                                <div className="flex items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                    <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center">
+                                        <div className="w-1 h-2 bg-white rounded-full" />
                                     </div>
-                                </SheetFooter>
-                            </motion.div>
-                        )}
+                                    Secure SSL encrypted browsing
+                                </div>
+                            </SheetFooter>
+                        </motion.div>
+
                     </div>
                 </SheetContent>
             </Sheet>

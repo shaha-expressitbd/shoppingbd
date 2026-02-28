@@ -3,37 +3,43 @@ import { useEffect, useState } from "react";
 import { Product } from "@/types/product";
 
 export const useProducts = () => {
-  // Initialize state with proper types
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<any>(null);
+  const [skip, setSkip] = useState<boolean>(true);
+  const [hasFetched, setHasFetched] = useState<boolean>(false);
 
-  // Fetch products using the query hook
   const {
     data,
     isLoading,
     isError,
     error: queryError,
-  } = useGetProductsQuery({
-    limit: 1000, // Adjust based on your needs
-  });
+    refetch,
+  } = useGetProductsQuery({ limit: 200 }, { skip });
 
   useEffect(() => {
     if (!isLoading && data) {
-      // Ensure data is an array of Product objects
       setAllProducts(Array.isArray(data) ? data : []);
       setLoading(false);
+      setHasFetched(true);
     }
-
     if (isError) {
       setError(queryError);
       setLoading(false);
     }
   }, [data, isLoading, isError, queryError]);
 
+  const fetchProducts = () => {
+    if (hasFetched) return;
+    setSkip(false);
+    setLoading(true);
+  };
+
   return {
     products: allProducts,
     loading,
     error,
+    fetchProducts,
+    hasFetched,
   };
 };

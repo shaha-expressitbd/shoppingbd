@@ -79,7 +79,7 @@ const ConditionTabBar: React.FC<ConditionTabBarProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center my-2 md:mt-0 mt-20">
+    <div className="flex flex-col items-center my-2 md:mt-20">
       {/* Full Slider Container */}
       <div className="relative w-full max-w-7xl mx-auto">
         {/* Left Arrow */}

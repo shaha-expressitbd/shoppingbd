@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     BiAward,
     BiCheckCircle,
@@ -89,7 +89,7 @@ const SupportPage = () => {
         {
             icon: BsMailbox,
             title: 'Email Support',
-            description: 'support@dressexpress.com',
+            description: 'support@shoppersbd.com',
             availability: 'Response within 2 hours',
             color: 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900',
         },
@@ -209,7 +209,7 @@ const SupportPage = () => {
     return (
         <div className="min-h-screen  bg-white dark:bg-gray-800">
             {/* Hero */}
-            <header className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white md:mt-0 -mt-4">
+            <header className="bg-primary text-white md:mt-8 -mt-4">
                 <div className="max-w-7xl mx-auto px-2 md:px-4 py-8 md:py-16 text-center">
                     <h1 className="text-2xl md:text-5xl font-bold mb-4">Support Center</h1>
                     <p className="text-sm md:text-xl text-red-100 max-w-3xl mx-auto">
@@ -370,7 +370,7 @@ const SupportPage = () => {
                                         </button>
                                         <button
                                             type="submit"
-                                            className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2 transition-colors"
+                                            className="bg-primary text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2 transition-colors"
                                         >
                                             <BiSend className="w-5 h-5" />
                                             Submit Ticket
@@ -409,13 +409,13 @@ const SupportPage = () => {
 
                             <div className=" bg-white dark:bg-gray-900 rounded-2xl p-6">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <FiZap className="w-6 h-6 text-red-600 dark:text-red-400" />
+                                    <FiZap className="w-6 h-6 text-primary" />
                                     <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Premium Support</h3>
                                 </div>
                                 <p className="text-gray-700 dark:text-gray-400 text-sm mb-4">
                                     Need priority assistance? Upgrade for faster response times and dedicated agents.
                                 </p>
-                                <button className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold transition-colors">
+                                <button className="w-full bg-primary text-white py-2 rounded-lg font-semibold transition-colors">
                                     Learn More
                                 </button>
                             </div>
@@ -427,7 +427,7 @@ const SupportPage = () => {
                 {activeTab === 'live-chat' && (
                     <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg overflow-hidden">
                         {/* header */}
-                        <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 flex items-center justify-between">
+                        <div className="bg-primary text-white p-6 flex items-center justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold">Live Chat Support</h2>
                                 <p className="text-red-100">Connected with Agent Sarah</p>
@@ -444,7 +444,7 @@ const SupportPage = () => {
                                 <div key={m.id} className={`flex ${m.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div
                                         className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${m.type === 'user'
-                                            ? 'bg-red-500 text-white'
+                                            ? 'bg-primary text-white'
                                             : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
                                             }`}
                                     >
@@ -490,7 +490,7 @@ const SupportPage = () => {
                                 />
                                 <button
                                     onClick={sendMessage}
-                                    className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg transition-colors"
+                                    className="bg-primary text-white px-6 py-3 rounded-lg transition-colors"
                                 >
                                     <BsSend className="w-5 h-5" />
                                 </button>
@@ -544,7 +544,7 @@ const SupportPage = () => {
                                             </li>
                                         ))}
                                     </ul>
-                                    <button className="w-full mt-4 text-red-600 dark:text-red-400 font-semibold hover:text-red-700 dark:hover:text-red-300 flex items-center justify-center gap-2">
+                                    <button className="w-full mt-4 text-primary font-semibold hover:text-secondary dark:hover:text-red-300 flex items-center justify-center gap-2">
                                         View All Articles
                                         <BsArrowRight className="w-4 h-4" />
                                     </button>
@@ -560,7 +560,7 @@ const SupportPage = () => {
                         <header className="text-center">
                             <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">System Status</h2>
                             <p className="text-gray-600 dark:text-gray-400">
-                                Current operational status of all Dress Express services.
+                                Current operational status of all shoppersbd services.
                             </p>
                         </header>
 
@@ -639,8 +639,8 @@ const SupportPage = () => {
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <a
-                            href="tel:+8801855375963"
-                            className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2 transition-colors"
+                            href="tel:+8801322414142"
+                            className="bg-primary hover:bg-secondary text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2 transition-colors"
                         >
                             <BiPhone className="w-5 h-5" />
                             Call Now: +880 1855-375963

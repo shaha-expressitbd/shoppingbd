@@ -31,11 +31,13 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-# .env.local
+.env
+.env.local
 .env.development
 .env.test
 .env.production
 
+/backup
 # vercel
 .vercel
 
@@ -45,7 +47,5 @@ next-env.d.ts
 
 *storybook.log
 storybook-static
-
-.vercel
 
 .vercel

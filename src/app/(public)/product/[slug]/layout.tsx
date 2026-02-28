@@ -4,18 +4,18 @@ import type { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Product Details - Dress Express",
+  title: "Product Details - YourStore",
   description: "View detailed product information",
   openGraph: {
-    title: "Product Details - Dress Express",
+    title: "Product Details - YourStore",
     description: "View detailed product information",
     type: "website",
-    images: [{ url: "/fallback-image.jpg" }],
+    images: [{ url: "/assets/falback.jpg" }],
   },
 };
 
 export default function ProductLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div>{children}</div>
+    <div className="">   {children}</div>
   );
 }

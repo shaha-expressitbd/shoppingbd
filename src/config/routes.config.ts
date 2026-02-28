@@ -28,5 +28,7 @@ export interface NavGroup {
 export const menuItems: NavGroup[] = [
   { title: "Home", path: "/", icon: FaHome },
   { title: "Shop", path: "/products", icon: FaShoppingBag },
-  { title: "Pre-Order", path: "/preorder", icon: FaBullhorn },
+  { title: "Campaigns", path: "", icon: FaBullhorn },
+  { title: "Flash Deals", path: "/flashdeals", icon: FaBolt },
+  { title: "New Arrivals", path: "/products/new", icon: FaStar },
 ];

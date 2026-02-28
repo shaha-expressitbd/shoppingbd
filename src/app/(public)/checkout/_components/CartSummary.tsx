@@ -1,28 +1,26 @@
+// components/CartSummary.tsx
 "use client";
 
-import { Button } from "@/components/ui/atoms/button";
+import React, { useState, useEffect } from "react";
+import { formatCurrency } from "@/utils/formatCurrency";
 import { CartItem } from "@/components/ui/molecules/cartItem";
 import type { TCartItem } from "@/lib/features/cart/cartSlice";
-import type { TPreorderCartItem } from "@/lib/features/preOrderCartSlice/preOrderCartSlice";
-import { formatCurrency } from "@/utils/formatCurrency";
-import React from "react";
-import { Dispatch, SetStateAction } from "react";
+import { Button } from "@/components/ui/atoms/button";
 
-interface CartSummaryProps {
-    items: (TCartItem | TPreorderCartItem)[];
+export interface CartSummaryProps {
+    items: TCartItem[];
     deliveryCharge: number;
     total: number;
     currency: string;
-    additional_discount_amount: number;
-    setDiscount: Dispatch<SetStateAction<number>>;
     removeItem: (id: string, variantId?: string) => void;
     updateItemQuantity: (
         id: string,
         variantId: string | undefined,
-        qty: number
+        qty: number,
     ) => void;
     isLoading: boolean;
-    handleSubmit: (e: React.FormEvent) => void;
+    handleSubmit: (e?: React.FormEvent) => void;
+    additional_discount_amount?: number;
 }
 
 export const CartSummary: React.FC<CartSummaryProps> = ({
@@ -30,33 +28,42 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
     deliveryCharge,
     total,
     currency,
-    additional_discount_amount,
-    setDiscount,
     removeItem,
     updateItemQuantity,
     isLoading,
     handleSubmit,
+    additional_discount_amount = 0,
 }) => {
+    const [itemCount, setItemCount] = useState(items.length);
+
+    useEffect(() => {
+        // console.log('CartSummary useEffect - items.length:', items.length, 'isClient:', typeof window !== 'undefined');
+        setItemCount(items.length);
+    }, [items.length]);
+
+    // Log initial render
+    // console.log('CartSummary render - items.length:', items.length, 'itemCount:', itemCount, 'isClient:', typeof window !== 'undefined');
+
     const subtotal = items.reduce(
-        (sum: number, item: TCartItem | TPreorderCartItem) => sum + item.price * item.quantity,
+        (sum: number, item: TCartItem) => sum + item.price * item.quantity,
         0
     );
 
     return (
-        <div className="w-full lg:w-2/5 lg:px-0 mb-50 lg:mb-0">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-2 lg:p-8 border border-gray-100 lg:sticky lg:top-20">
+        <div className="w-full mb-20 md:mb-32 lg:mb-0">
+            <div className=" bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-2 border border-gray-100 lg:sticky lg:top-20">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white">
                         🛍️ আপনার কার্ট
                     </h2>
                     <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap">
-                        {items.length} আইটেম
+                        {itemCount} আইটেম
                     </span>
                 </div>
 
                 {/* Items */}
-                <div className="space-y-4 overflow-y-auto pr-2 pb-52 lg:pb-0 lg:max-h-[50vh]">
+                <div className="space-y-4 overflow-y-auto pr-2 md:max-h-[40vh] lg:max-h-[50vh] ">
                     {items.map((item) => (
                         <div
                             key={`${item._id}-${item.variantId ?? "default"}`}
@@ -69,6 +76,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                                     updateItemQuantity(item._id, item.variantId, q)
                                 }
                                 showQuantityControls
+                                currency={currency}
                             />
                         </div>
                     ))}
@@ -110,12 +118,11 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                         </div>
                     </div>
 
-
-
                     <Button
                         type="button"
                         title="order"
-                        variant="gradient"
+                        variant="default"
+                        size="lg"
                         className="w-full mt-6"
                         disabled={isLoading}
                         onClick={handleSubmit}

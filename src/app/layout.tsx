@@ -1,10 +1,8 @@
 "use client";
-
-import { useEffect } from "react";
+import { initializeTracking, storeUtmParams, trackPageView } from "@/utils/gtm";
+import { detectAndStoreCustomerSource } from "@/utils/sourceTracking"; // Import here
 import { usePathname } from "next/navigation";
-import { trackPageView } from "@/utils/gtm";
-import { storeUtmParams } from "@/utils/gtm";
-
+import { useEffect } from "react";
 
 export default function RootLayout({
   children,
@@ -14,16 +12,20 @@ export default function RootLayout({
   const pathname = usePathname();
 
   useEffect(() => {
+    performance.mark("root-layout-start");
     trackPageView(pathname);
     storeUtmParams();
+    detectAndStoreCustomerSource(); // Call here for every page
+    initializeTracking(); // Capture fbclid & fetch IP
+    performance.mark("root-layout-end");
+    performance.measure(
+      "root-layout-load",
+      "root-layout-start",
+      "root-layout-end",
+    );
+    const measure = performance.getEntriesByName("root-layout-load")[0];
+    console.log(`RootLayout load time: ${measure.duration}ms`);
   }, [pathname]);
 
-  return (
-    <>
-      {children}
-
-
-      {/* <ConsentManager /> */}
-    </>
-  );
+  return <>{children}</>;
 }

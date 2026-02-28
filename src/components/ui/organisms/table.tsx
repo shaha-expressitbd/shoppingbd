@@ -1,6 +1,7 @@
 import React, { useCallback, useContext, useState } from "react";
 import { twMerge } from "tailwind-merge";
-import { Skeleton } from "../atoms/skeleton";
+import SkeletonComponent from "../skeleton/SkeletonComponent";
+
 
 // -------------------- Types --------------------
 type SortConfigType = { key: string; direction: "ascending" | "descending" };
@@ -87,7 +88,7 @@ export const Table = ({
 
   const renderSkeletonCell = (index: number) => (
     <TableCell key={index} loading>
-      <Skeleton className='h-6 w-full rounded' />
+      <SkeletonComponent className='h-6 w-full rounded' />
     </TableCell>
   );
 
@@ -210,9 +211,8 @@ export const TableHead = ({
       {...props}
     >
       <div
-        className={`flex items-center ${
-          align === "center" ? "justify-center" : align === "right" ? "justify-end" : ""
-        }`}
+        className={`flex items-center ${align === "center" ? "justify-center" : align === "right" ? "justify-end" : ""
+          }`}
       >
         {children}
         {sortable && currentSort && <span className='ml-1 '>{currentSort.direction === "ascending" ? "↑" : "↓"}</span>}
@@ -267,7 +267,7 @@ export const TableCell = ({
   className,
   children,
   loading = false,
-  loadingFallback = <Skeleton className='h-6 w-full' />,
+  loadingFallback = <SkeletonComponent className='h-6 w-full' />,
   align = "left",
   ...props
 }: TableCellProps) => {

@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { Product } from "@/types/product";
 import ProductCard from "./ui/organisms/product-card";
 import { motion, AnimatePresence } from "framer-motion";
+import { LoadingSpinner } from "./ui/atoms/loading-spinner";
+import ProductCardSkeleton from "@/components/ui/skeleton/ProductCardSkeleton";
 
 // Utility function to shuffle an array with proper TypeScript typing
 function shuffleArray<T>(array: T[]): T[] {
@@ -18,6 +20,7 @@ function shuffleArray<T>(array: T[]): T[] {
 
 interface AllProductsProps {
     initialProducts: Product[];
+    isFirstVisit?: boolean;
 }
 
 interface Tab {
@@ -26,7 +29,7 @@ interface Tab {
     count: number;
 }
 
-export default function AllProducts({ initialProducts }: AllProductsProps) {
+export default function AllProducts({ initialProducts, isFirstVisit = false }: AllProductsProps) {
     const searchParams = useSearchParams();
     const urlCondition = searchParams.get("condition")?.toLowerCase() || null;
 
@@ -34,17 +37,6 @@ export default function AllProducts({ initialProducts }: AllProductsProps) {
     const [selected, setSelected] = useState<string>(() =>
         urlCondition && tabs.some((t) => t.id === urlCondition) ? urlCondition : "all"
     );
-    const [windowWidth, setWindowWidth] = useState<number | null>(null);
-
-    // Handle window resize for dynamic grid updates
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-
-        const handleResize = () => setWindowWidth(window.innerWidth);
-        handleResize(); // Set initial width
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
-    }, []);
 
     // Handle initial loading state
     useEffect(() => {
@@ -107,24 +99,22 @@ export default function AllProducts({ initialProducts }: AllProductsProps) {
         [selected, initialProducts, grouped]
     );
 
-    // Randomly shuffle and limit products based on Tailwind breakpoints
+    // Randomly shuffle and limit products based on device size
     const displayedProducts = useMemo(() => {
         const shuffled = shuffleArray(filtered);
-
-        // Use Tailwind breakpoint values
-        const isLargeDevice = windowWidth !== null && windowWidth >= 1024; // lg: 1024px
-        const isMediumDevice = windowWidth !== null && windowWidth >= 768 && windowWidth < 1024; // md: 768px to 1023px
-        const isMobileDevice = windowWidth !== null && windowWidth < 768; // below 768px
+        const isLargeDevice = typeof window !== "undefined" && window.innerWidth >= 1024; // lg: 1024px and above
+        const isMediumDevice = typeof window !== "undefined" && window.innerWidth >= 768 && window.innerWidth < 1024; // md: 768px to 1023px
+        const isMobileDevice = typeof window !== "undefined" && window.innerWidth < 768; // below 768px
 
         if (isLargeDevice) {
-            return shuffled.slice(0, 15); // 5x3 grid (5 columns, 3 rows)
+            return shuffled.slice(0, 12); // 4x3 grid, limited to 12
         } else if (isMediumDevice) {
-            return shuffled.slice(0, 12); // 4x3 grid (4 columns, 3 rows)
+            return shuffled.slice(0, 9); // 3x3 grid, limited to 9
         } else if (isMobileDevice) {
-            return shuffled.slice(0, 8); // 2x4 grid (2 columns, 4 rows)
+            return shuffled.slice(0, 8); // 2x4 grid, limited to 8
         }
-        return shuffled.slice(0, 8); // Fallback for SSR or undefined width
-    }, [filtered, selected, windowWidth]);
+        return shuffled.slice(0, 8); // Fallback for mobile
+    }, [filtered, selected]);
 
     // Handle tab selection
     const handleTabClick = (tabId: string) => {
@@ -132,15 +122,24 @@ export default function AllProducts({ initialProducts }: AllProductsProps) {
     };
 
     return (
-        <div className="lg:container mx-auto lg:px-0 px-1 pt-0 pb-4 md:px-4 md:pt-0 md:pb-6 bg-white dark:bg-gray-800 md:mb-10 mb-4">
+        <div className="px-1 pt-0 pb-4 md:px-4 md:pt-0 md:pb-6 bg-secondary dark:secondary">
             {/* Header */}
             <div className="relative mb-6 md:mb-8 text-center">
-                <div className="inline-flex gap-2 items-center mb-3 mt-8">
+                <div className="inline-flex gap-2 items-center mb-3 mt-16">
                     <p className="text-gray-500 text-3xl dark:text-white">
-                        Most <span className="text-gray-700 font-medium dark:text-white">viewing products</span>
+                        LATEST <span className="text-gray-700 font-medium dark:text-white">COLLECTIONS</span>
                     </p>
-                    <p className="w-8 sm:w-12 h-0.5 bg-gray-700 hidden md:block"></p>
+                    <p className="w-8 sm:w-12 h-0.5 bg-gray-700"></p>
                 </div>
+                <p className="mx-10 sm:mx-auto sm:w-1/2 text-xs sm:text-sm md:text-base">
+                    ✨ <span className="text-black dark:text-white">নতুন স্টাইলে জ্বলে উঠুন!</span> ✨<br />
+                    <span className="text-black dark:text-white">
+                        ট্রেন্ডিং পণ্যগুলোর সাথে থাকুন সবসময় এক ধাপ এগিয়ে! আপনার ফ্যাশন, আপনার পরিচয়{" "}
+                    </span>
+                    <br />
+                    <span className="text-red-400">shoppersbd</span>
+                    <span className="text-black dark:text-white"> এর সাথে।❤️</span>
+                </p>
             </div>
 
             {/* Products Grid */}
@@ -153,21 +152,37 @@ export default function AllProducts({ initialProducts }: AllProductsProps) {
                     transition={{ duration: 0.4, ease: "easeInOut" }}
                 >
                     {isLoading ? (
-                        <div className="px-1 md:px-0 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-4 w-full">
-                            {/* Skeleton placeholders can be added here if needed */}
+                        <div className="lg:container mx-auto px-1 md:px- grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-4 gap-2 sm:gap-2 md:gap-4 w-full">
+                            {Array(8)
+                                .fill(0)
+                                .map((_, index) => (
+                                    <motion.div
+                                        key={`skeleton-${index}`}
+                                        initial={isFirstVisit ? { opacity: 0, scale: 0.9, y: 20 } : { opacity: 1, scale: 1, y: 0 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        transition={isFirstVisit ? {
+                                            duration: 0.3,
+                                            delay: Math.min(index * 0.03, 0.5),
+                                            ease: "easeOut",
+                                        } : { duration: 0 }}
+                                        className="w-full"
+                                    >
+                                        <ProductCardSkeleton />
+                                    </motion.div>
+                                ))}
                         </div>
                     ) : displayedProducts.length > 0 ? (
-                        <div className="px-1 md:px-0 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-4 w-full">
+                        <div className="lg:container max-auto grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-4 gap-2 md:gap-4 w-full  mx-auto  ">
                             {displayedProducts.map((product, index) => (
                                 <motion.div
                                     key={`${product._id}-${selected}-${index}`}
-                                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    initial={isFirstVisit ? { opacity: 0, scale: 0.9, y: 20 } : { opacity: 1, scale: 1, y: 0 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    transition={{
+                                    transition={isFirstVisit ? {
                                         duration: 0.3,
                                         delay: Math.min(index * 0.03, 0.5),
                                         ease: "easeOut",
-                                    }}
+                                    } : { duration: 0 }}
                                     whileHover={{ y: -2 }}
                                     className="w-full"
                                 >

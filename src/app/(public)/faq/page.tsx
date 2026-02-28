@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
     BiCheckCircle,
     BiChevronDown,
@@ -147,13 +147,13 @@ const FAQPage = () => {
     return (
         <div className="min-h-screen bg-white dark:bg-gray-800">
             {/* Hero */}
-            <header className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white md:mt-0 -mt-4">
+            <header className="bg-primary text-white md:mt-8 -mt-4">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 text-center">
                     <h1 className="text-3xl md:text-5xl font-bold mb-4">
                         Frequently Asked Questions
                     </h1>
                     <p className="text-base md:text-xl text-red-100 max-w-3xl mx-auto">
-                        Find answers to common questions about Dress Express’s products, services,
+                        Find answers to common questions about shoppersbd’s products, services,
                         and policies.
                     </p>
                 </div>
@@ -183,7 +183,7 @@ const FAQPage = () => {
                             key={label}
                             className="bg-white dark:bg-gray-900 rounded-xl p-6 text-center shadow-lg hover:shadow-xl transition-shadow"
                         >
-                            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center mx-auto mb-3">
+                            <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center mx-auto mb-3">
                                 <Icon className="w-6 h-6 text-white" />
                             </div>
                             <div className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">
@@ -212,7 +212,7 @@ const FAQPage = () => {
                                         <button
                                             onClick={() => setSelectedCategory(id)}
                                             className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${selectedCategory === id
-                                                ? 'bg-gradient-to-r from-red-500 to-red-600 text-white'
+                                                ? 'bg-primary text-white'
                                                 : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100'
                                                 }`}
                                         >
@@ -276,7 +276,7 @@ const FAQPage = () => {
                                                             {f.question}
                                                         </span>
                                                         {f.popular && (
-                                                            <span className="bg-gradient-to-r from-red-500 to-red-600 text-white px-2 py-0.5 rounded-full text-xs font-medium">
+                                                            <span className="bg-primary text-white px-2 py-0.5 rounded-full text-xs font-medium">
                                                                 Popular
                                                             </span>
                                                         )}
@@ -305,7 +305,7 @@ const FAQPage = () => {
             </main>
 
             {/* CTA */}
-            <footer className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white">
+            <footer className="bg-primary text-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 text-center">
                     <h2 className="text-2xl md:text-3xl font-bold mb-4">
                         Still have questions?
@@ -314,13 +314,13 @@ const FAQPage = () => {
                         Our customer support team is here to help you 24/7.
                     </p>
                     <div className="flex flex-col sm:flex-row justify-center gap-4">
-                        <button className="bg-white text-red-600 px-6 md:px-8 py-3 rounded-xl font-semibold hover:bg-red-50 transition-colors flex items-center gap-2 text-sm ">
+                        <button className="bg-white text-primary px-6 md:px-8 py-3 rounded-xl font-semibold hover:bg-red-50 transition-colors flex items-center gap-2 text-sm ">
                             <FiMessageCircle className="w-5 h-5" />
                             Live Chat
                         </button>
-                        <button className="bg-red-800 text-white px-6 md:px-8 py-3 rounded-xl font-semibold hover:bg-red-900 transition-colors flex items-center gap-2 text-sm ">
+                        <button className="bg-primary text-white px-6 md:px-8 py-3 rounded-xl font-semibold hover:bg-red-900 transition-colors flex items-center gap-2 text-sm ">
                             <BiPhone className="w-5 h-5" />
-                            <a href="tel:01855375963">Call Support</a>
+                            <a href="tel:01322414142">Call Support</a>
                         </button>
                     </div>
                 </div>

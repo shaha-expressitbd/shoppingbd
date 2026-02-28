@@ -1,7 +1,9 @@
 "use client";
 import { Button } from "@/components/ui/atoms/button";
+import Image from "@/components/ui/atoms/image";
 import { useAppDispatch } from "@/hooks/useAppDispatch";
 import { clearCart } from "@/lib/features/cart/cartSlice";
+import { trackOnlinePaymentFail, trackOnlinePaymentSuccess, trackOrderCancel } from "@/utils/gtm";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -27,7 +29,7 @@ interface OrderItem {
 
 export function OrderStatus() {
     const searchParams = useSearchParams();
-    const status = searchParams.get("status") || "fail";
+    const status = (searchParams.get("status") || "fail").toLowerCase();
     const orderId = searchParams.get("orderId");
     const transaction_id = searchParams.get("transaction_id");
     const error = searchParams.get("error");
@@ -44,7 +46,8 @@ export function OrderStatus() {
     const paymentMethod = rawPaymentMethod === "cashOnDelivery" ? "Cash on Delivery" : rawPaymentMethod;
     const isCashOnDelivery = rawPaymentMethod === "cashOnDelivery";
     const isSuccess = status === "success";
-    const isFailure = status === "fail";
+    const isFailure = status === "fail" || status === "failed";
+    const isCancelled = status === "cancelled" || status === "cancel";
     const isIncomplete = status === "incomplete";
     const dispatch = useAppDispatch();
 
@@ -73,8 +76,10 @@ export function OrderStatus() {
                 const name = decodeURIComponent(searchParams.get(`itemName${i}`) || `Product ${i + 1}`);
                 const price = parseFloat(searchParams.get(`itemPrice${i}`) || "0");
                 const quantity = parseInt(searchParams.get(`itemQty${i}`) || "1", 10);
+                const imageParam = searchParams.get(`itemImage${i}`);
+                const image = imageParam ? decodeURIComponent(imageParam) : undefined;
                 const itemTotal = price * quantity;
-                items.push({ name, price, quantity });
+                items.push({ name, price, quantity, image });
                 totalAmount += itemTotal;
             }
 
@@ -87,8 +92,23 @@ export function OrderStatus() {
             }
         }
 
-        const Items = sessionStorage.getItem(`orderId-${orderId}`) || "[]";
-        setOrderItems(JSON.parse(Items));
+        const ItemsStorage = sessionStorage.getItem(`orderId-${orderId}`) || "[]";
+        let parsedItems: any[] = [];
+        try {
+            parsedItems = JSON.parse(ItemsStorage);
+        } catch (e) {
+            parsedItems = [];
+        }
+
+        // Merge sessionStorage items with parsed URL items to retain images
+        const finalItems = parsedItems.length > 0
+            ? parsedItems.map((sItem, index) => ({
+                ...sItem,
+                image: items[index]?.image || sItem.image || "/assets/fallback.jpg"
+            }))
+            : items;
+
+        setOrderItems(finalItems);
         const delivery = parseFloat(searchParams.get("deliveryCharge") || "0");
         const discount = parseFloat(searchParams.get("additionalDiscount") || "0");
         const totalAmountParam = parseFloat(searchParams.get("total_amount") || "0");
@@ -99,9 +119,21 @@ export function OrderStatus() {
         setAdditionalDiscount(discount);
         setTotal(finalTotal);
 
-        // Animate progress bar
+        // Animate progress bar & Track Purchase
         if (isSuccess || isIncomplete) {
             if (isSuccess) {
+                // Track Online Payment Success (Only for non-COD)
+                // COD orders are tracked as "cod_place" in checkout page.
+                if (!isCashOnDelivery && orderId && !sessionStorage.getItem(`tracked-${orderId}`)) {
+                    trackOnlinePaymentSuccess(
+                        orderId,
+                        transaction_id || `TRX-${orderId}`,
+                        finalTotal,
+                        items
+                    );
+                    sessionStorage.setItem(`tracked-${orderId}`, "true");
+                }
+
                 dispatch(clearCart());
                 sessionStorage.removeItem("pendingOrderData");
             }
@@ -109,6 +141,18 @@ export function OrderStatus() {
                 setCurrentStep((prev) => (prev < (isIncomplete ? 1 : 3) ? prev + 1 : prev));
             }, 2000);
             return () => clearInterval(timer);
+        } else if (isFailure || isCancelled) {
+            // Track Failed or Cancelled Payment
+            const eventId = `tracked-${status}-${orderId}`;
+            if (!sessionStorage.getItem(eventId)) {
+                const errorMsg = decodeURIComponent(error || "Unknown Error");
+                if (isCancelled) {
+                    trackOrderCancel(orderId || "unknown", errorMsg);
+                } else {
+                    trackOnlinePaymentFail(orderId || "unknown", errorMsg);
+                }
+                sessionStorage.setItem(eventId, "true");
+            }
         }
     }, [searchParams, isSuccess, dispatch, orderId]);
 
@@ -130,7 +174,7 @@ export function OrderStatus() {
                 <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-green-400/20 to-blue-400/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
             </div>
 
-            <div className="container mx-auto px-4 py-8 md:py-16 relative z-10">
+            <div className="container mx-auto px-1 py-8 md:py-16 relative z-10">
                 <div
                     className={`w-full md:max-w-6xl mx-auto transition-all duration-1000 ease-out transform ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"
                         }`}
@@ -320,11 +364,15 @@ export function OrderStatus() {
                                                 {orderItems.map((item, i) => (
                                                     <tr key={i} className="border-b border-slate-100 dark:border-slate-700/50">
                                                         <td className="py-2 sm:py-3 font-medium">
-                                                            <img
-                                                                src={item.image}
-                                                                alt={item.name}
-                                                                className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded"
-                                                            />
+                                                            <div className="w-10 h-10 sm:w-12 sm:h-12 relative overflow-hidden rounded">
+                                                                <Image
+                                                                    src={item.image || "/assets/fallback.jpg"}
+                                                                    alt={item.name}
+                                                                    fill
+                                                                    className="object-cover"
+                                                                    variant="small"
+                                                                />
+                                                            </div>
                                                         </td>
                                                         <td className="py-2 sm:py-3 font-medium text-sm text-black dark:text-white">{item.name}</td>
                                                         <td className="py-2 sm:py-3 text-center text-sm text-black dark:text-white">{item.quantity}</td>

@@ -1,10 +1,10 @@
 "use client";
 
+import { useWishlist } from "@/hooks/useWishlist";
+import type { Product, Variant } from "@/types/product";
 import { useCallback } from "react";
 import { FiHeart } from "react-icons/fi";
 import { toast } from "sonner";
-import type { Product, Variant } from "@/types/product";
-import { useWishlist } from "@/hooks/useWishlist";
 
 interface Props {
     item: Product;
@@ -29,11 +29,16 @@ export default function AddToWishlistBtn({
 }: Props) {
     const { items, addItem, removeItem } = useWishlist();
 
-    /* সঠিক variantId খুঁজে বের করি */
-    const variantId =
-        variant?._id ?? item.variantsId?.[0]?._id ?? item._id;
+    /* ENHANCED CONSISTENCY: Always use variant-level IDs for proper merging */
+    const hasVariants = item.hasVariants && item.variantsId.length > 0;
+    const uniqueId = variant && hasVariants ? variant._id : item.variantsId[0]._id;
 
-    const isWishlisted = items.some((i) => i._id === variantId);
+    const isWishlisted = items.some((i) => i._id === uniqueId);
+
+    /* Check if pre-order */
+    const isPreOrder =
+        item.isPreOrder ||
+        (hasVariants ? (variant?.isPreOrder ?? false) : (item.variantsId?.[0]?.isPreOrder ?? false));
 
     /* ---------------- handler ---------------- */
     const handleClick = useCallback(() => {
@@ -42,6 +47,12 @@ export default function AddToWishlistBtn({
             onVariantMissing?.();
             return;
         }
+
+        if (isPreOrder) {
+            toast.error("Pre-order items cannot be added to wishlist");
+            return;
+        }
+
         const outOfStock =
             variant ? variant.variants_stock <= 0 : item.total_stock <= 0;
 
@@ -52,31 +63,39 @@ export default function AddToWishlistBtn({
 
         /* remove */
         if (isWishlisted) {
-            removeItem(variantId);
+            removeItem(uniqueId);
             toast.success("Removed from wishlist");
             return;
         }
 
         /* add */
-        const selectedV = variant ?? item.variantsId?.[0];
-        const sellingPrice = Number(selectedV?.selling_price ?? 0);
-        const offerPrice = Number(selectedV?.offer_price ?? sellingPrice);
-        const now = Date.now();
-        const offerStart = selectedV?.discount_start_date ? new Date(selectedV.discount_start_date).getTime() : 0;
-        const offerEnd = selectedV?.discount_end_date ? new Date(selectedV.discount_end_date).getTime() : 0;
-        const price = (offerPrice < sellingPrice && now >= offerStart && now <= offerEnd) ? offerPrice : sellingPrice;
+        const selectedV = variant ?? item.variantsId?.[0]; // Fallback to first variant if no variant
+        // Trust backend finalPrice if discount is active, otherwise use offerPrice or sellingPrice
+        const price = selectedV?.isDiscountActive === true && selectedV?.finalPrice
+            ? Number(selectedV.finalPrice)
+            : Number(selectedV?.offer_price ?? selectedV?.selling_price ?? item.selling_price ?? 0);
+
+        const sellingPrice = Number(selectedV?.selling_price ?? item.selling_price ?? 0);
+        const isDiscountActive = selectedV?.isDiscountActive ?? false;
 
         addItem({
-            _id: variantId,
-            productId: item._id,
+            _id: uniqueId, // Always use variant ID for variant products, product ID for non-variant
+            productId: item._id, // Always the main product ID
+            variantId: hasVariants ? (variant ? variant._id : undefined) : undefined, // Set variantId consistently
             name: item.name,
             price,
+            sellingPrice,
+            isDiscountActive,
             currency: "BDT",
-            image: `${process.env.NEXT_PUBLIC_IMAGE_URL
-                }${variant?.image?.alterImage.secure_url ??
-                item.images[0]?.alterImage.secure_url
-                }`,
+            image: `${variant?.image?.alterImage?.secure_url ??
+                item.images[0]?.alterImage?.secure_url ??
+                "/placeholder.png"}`,
             variantValues: variant?.variants_values ?? [],
+            variantGroups: item.variantsGroup ?? [],
+        });
+        // Track Add To Wishlist
+        import("@/utils/gtm").then(({ trackAddToWishlist }) => {
+            trackAddToWishlist(item, variant || undefined);
         });
         toast.success("Added to wishlist");
     }, [
@@ -86,8 +105,9 @@ export default function AddToWishlistBtn({
         isWishlisted,
         addItem,
         removeItem,
-        variantId,
+        uniqueId,
         onVariantMissing,
+        isPreOrder,
     ]);
 
     /* ---------------- UI ---------------- */

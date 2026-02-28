@@ -8,18 +8,45 @@ const ThemeToggler: React.FC = () => {
   const { mode, toggleMode } = useTheme();
 
   return (
-    <Button
-      title='Theme Toggler'
-      variant='ghost'
-      onClick={toggleMode}
-      className='p-2 rounded-full bg-gray-100 dark:bg-gray-900 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors duration-200'
-    >
-      {mode === "light" ? (
-        <FaMoon className='w-5 h-5 text-gray-700 dark:text-gray-300' />
-      ) : (
-        <FaSun className='w-5 h-5 text-yellow-500 dark:text-yellow-300' />
-      )}
-    </Button>
+    <>
+      {/* Mobile version (shows icon + text) - visible on small screens only */}
+      <Button
+        title='Theme Toggler'
+        variant='ghost'
+        onClick={toggleMode}
+        className="md:hidden group flex items-center gap-2"
+      >
+        {mode === "light" ? (
+          <div className="flex flex-col items-center">
+            <FaMoon className='w-6 h-6 text-white dark:text-gray-300' />
+            <span className="text-xs transition-all duration-500 ease-in-out text-white dark:text-white">
+              Dark
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center">
+            <FaSun className='w-6 h-6 text-yellow-500 dark:text-yellow-300' />
+            <span className="text-xs transition-all duration-500 ease-in-out text-white dark:text-white">
+              Light
+            </span>
+          </div>
+        )}
+      </Button>
+
+      {/* Desktop version (shows icon only) - hidden on mobile, visible on md and up */}
+      <Button
+        title='Theme Toggler'
+        variant='ghost'
+        onClick={toggleMode}
+        className='hidden md:inline-flex'
+      >
+        {mode === "light" ? (
+          <FaMoon className='w-5 h-5 text-white dark:text-gray-300' />
+        ) : (
+          <FaSun className='w-5 h-5 text-yellow-500 dark:text-yellow-300' />
+        )}
+      </Button>
+    </>
   );
 };
 

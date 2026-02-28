@@ -104,7 +104,7 @@ export default function PreOrderProducts({ initialProducts }: PreOrderProductsPr
                         {displayedProducts.length > 0 ? (
                             <>
                                 {/* Products Grid */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-8 mb-12">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-8 mb-12">
                                     {displayedProducts.map((product, index) => (
                                         <ProductCard product={product} isAboveFold={index < 6} />
                                     ))}
@@ -184,7 +184,7 @@ export default function PreOrderProducts({ initialProducts }: PreOrderProductsPr
 
                                         <motion.button
                                             onClick={() => window.location.href = '/'}
-                                            className="inline-flex items-center gap-3 px-6 py-3 text-black font-bold bg-gradient-to-r from-sidebar to-accent rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                                            className="inline-flex items-center gap-3 px-6 py-3 text-white font-bold bg-gradient-to-r from-sidebar to-accent rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
                                             whileHover={{ scale: 1.05 }}
                                             whileTap={{ scale: 0.95 }}
                                         >

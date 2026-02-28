@@ -34,16 +34,17 @@ export const usePreorderCart = () => {
   const rawIsOpen = useAppSelector(selectIsPreorderCartOpen);
   const cartItems = useAppSelector(selectCartItems); // Check regular cart items
 
-  // Debugging: Log to verify persisted state
-  if (typeof window !== "undefined") {
-    console.log("PreorderCart State:", {
-      rawItem,
-      rawItemCount,
-      rawSubtotal,
-      rawDiscount,
-      rawGrandTotal,
-      rawIsOpen,
-    });
+  // Debugging: Log to verify persisted state (only in development)
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    // Remove excessive logging - uncomment only when needed for debugging
+    // console.log("PreorderCart State:", {
+    //   rawItem,
+    //   rawItemCount,
+    //   rawSubtotal,
+    //   rawDiscount,
+    //   rawGrandTotal,
+    //   rawIsOpen,
+    // });
   }
 
   /* ───────── memoised state ───────── */
@@ -62,25 +63,15 @@ export const usePreorderCart = () => {
   /* ───────── actions ───────── */
   const addToPreorderCart = useCallback(
     (preorderItem: TPreorderCartItem) => {
-      // Check if regular cart has items
-      if (cartItems.length > 0) {
-        // Show warning message (e.g., using react-toastify or alert)
-        if (typeof window !== "undefined") {
-          alert(
-            "You have items in your regular cart. Please complete or clear your regular cart checkout before adding a preorder item."
-          );
-        }
-        return;
-      }
-
       dispatch(setPreorderItem(preorderItem));
-      trackAddToCart(preorderItem);
+      // Note: Preorder items go directly to checkout, not through regular cart analytics
       router.push("/checkout");
     },
-    [dispatch, router, cartItems]
+    [dispatch, router]
   );
 
   const clearPreorderCartItems = useCallback(() => {
+    console.log("🛒 Calling clearPreorderCart from hook");
     dispatch(clearPreorderCart());
   }, [dispatch]);
 
@@ -138,5 +129,19 @@ export const usePreorderCart = () => {
     /* utils */
     itemExists,
     getItemQuantity,
+
+    /* helpers */
+    getVariantLabel: (
+      values: string[],
+      groups: { variantName: string }[] = []
+    ) => {
+      if (!values?.length || !groups?.length) return values?.join(", ") ?? "";
+      return values
+        .map((val, idx) => {
+          const groupName = groups[idx]?.variantName || "";
+          return groupName ? `${groupName}: ${val}` : val;
+        })
+        .join(", ");
+    },
   };
 };

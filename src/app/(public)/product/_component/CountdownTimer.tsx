@@ -46,29 +46,26 @@ export const CountdownTimer = ({ endDate }: { endDate: string }) => {
     }, [endDate]);
 
     if (timeLeft.completed) {
-        return (
-            <div className="bg-gray-100 dark:bg-gray-600 px-3 py-2 rounded-lg text-center">
-                <span className="text-sm text-gray-600 dark:text-gray-200">Sale ended</span>
-            </div>
-        );
+        return null
     }
 
     return (
-        <div className="bg-white dark:bg-gray-200 border border-gray-200 rounded-lg p-3 shadow-sm">
-            <div className="text-xs text-gray-500 mb-2 text-center dark:text-gray-700">Offer ends in</div>
+        // <div className="bg-white dark:bg-gray-200 border border-gray-200 rounded-lg p-3 shadow-sm">
+        <div className="bg-secondary dark:bg-gray-200  rounded-lg p-3 shadow-sm">
+            <div className="text-xs text-primary mb-2 text-center dark:text-primary">Offer ends in</div>
             <div className="flex justify-center items-center space-x-2">
                 <div className="text-center">
-                    <div className="text-xl font-bold">{timeLeft.days.toString().padStart(2, '0')}</div>
+                    <div className="text-xl font-bold text-primary  dark:text-primary">{timeLeft.days.toString().padStart(2, '0')}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-700">Days</div>
                 </div>
                 <div className="text-gray-300">:</div>
                 <div className="text-center">
-                    <div className="text-xl font-bold">{timeLeft.hours.toString().padStart(2, '0')}</div>
+                    <div className="text-xl font-bold text-primary  dark:text-primary">{timeLeft.hours.toString().padStart(2, '0')}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-700">Hours</div>
                 </div>
                 <div className="text-gray-300">:</div>
                 <div className="text-center">
-                    <div className="text-xl font-bold">{timeLeft.minutes.toString().padStart(2, '0')}</div>
+                    <div className="text-xl font-bold text-primary dark:text-primary">{timeLeft.minutes.toString().padStart(2, '0')}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-700">Minutes</div>
                 </div>
                 <div className="text-gray-300">:</div>

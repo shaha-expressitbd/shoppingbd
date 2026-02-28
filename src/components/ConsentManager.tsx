@@ -1,6 +1,5 @@
 // components/ConsentManager.tsx
 "use client";
-import { useEffect, useState } from "react";
 import {
   getUserContext,
   hasTrackingConsent,
@@ -8,6 +7,7 @@ import {
   storeUtmParams,
   trackEvent,
 } from "@/utils/gtm";
+import { useEffect, useState } from "react";
 
 const ConsentManager = () => {
   const [consentGiven, setConsentGiven] = useState<boolean | null>(null);
@@ -30,7 +30,7 @@ const ConsentManager = () => {
       setShowBanner(true);
 
       // Track the initial consent banner view
-      trackEvent("consent_banner_view", {}, false);
+      trackEvent("consent_banner_view", {});
     }
   }, []);
 

@@ -2,12 +2,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "All Products - CalQuick",
-  description: "Browse all products available from CalQuick businesses.",
+  title: "All Products - shoppersbd",
+  description: "Browse all products available from shoppersbd businesses.",
   openGraph: {
-    title: "All Products - CalQuick",
+    title: "All Products - shoppersbd",
     description: "Browse a wide selection of products offered by various businesses.",
-    url: "https://yourdomain.com/products",
+    url: "https://shoppersbd.com/products",
     type: "website",
     images: [
       {
@@ -21,5 +21,5 @@ export const metadata: Metadata = {
 };
 
 export default function ProductsLayout({ children }: { children: React.ReactNode }) {
-  return <div className="md:mb-4 overflow-hidden">{children}</div>;
+  return <div className="">{children}</div>;
 }

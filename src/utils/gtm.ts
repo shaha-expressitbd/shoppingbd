@@ -1,8 +1,14 @@
 // gtm.ts
-import { TCartItem } from "@/lib/features/cart/cartSlice";
-import type { Product, Variant } from "@/types/product";
+// Production-Ready GTM-Only Tracking Implementation
+// Migrated from womensfashion_nextjs - Clean, no direct Meta Pixel/CAPI calls
+// All pixel firing is handled by GTM tags
 
-// Types for enhanced tracking
+import { TCartItem } from "@/lib/features/cart/cartSlice";
+import { Product, Variant } from "@/types/product";
+import { getCustomerSource } from "./sourceTracking";
+
+// ====== TYPE DEFINITIONS ======
+
 interface GtmEcommerceItem {
   item_id: string;
   item_name: string;
@@ -15,750 +21,1017 @@ interface GtmEcommerceItem {
   item_list_name?: string;
   item_list_id?: string;
   index?: number;
+  discount?: number;
+  item_sku?: string;
+  item_condition?: string;
+  item_availability?: "in_stock" | "out_of_stock";
 }
 
-interface TrackingContext {
+interface CustomerDetails {
+  name?: string;
+  phone?: string;
+  email?: string;
+  city?: string;
+  address?: string;
+  delivery_area?: string;
+  zip?: string;
+  country?: string;
+}
+
+interface UserData {
   external_id: string;
-  click_id: string | null;
-  visitor_ip: string | null;
-  user_agent: string;
-  session_id: string;
-  first_visit: boolean;
+  fbp?: string;
+  fbc?: string;
+  country: string;
+  client_user_agent: string;
+  email?: string;
+  fn?: string;
+  ln?: string;
+  ph?: string;
+  ct?: string;
+  st?: string;
+  zp?: string;
+  ad?: string;
 }
 
-interface ClickData {
-  id: string;
-  timestamp: string;
-  url: string;
-  referrer: string;
-  source: string;
+interface PurchaseTrackingParams {
+  transactionId: string;
+  items: GtmEcommerceItem[] | TCartItem[];
+  totalValue: number;
+  tax?: number;
+  shipping?: number;
+  coupon?: string;
+  customer?: CustomerDetails;
+  paymentMethod?: string;
 }
 
-interface PageData {
-  url: string;
-  path: string;
-  search: string;
-  title: string;
-  referrer: string;
+interface OrderPlacementParams {
+  orderId: string;
+  totalValue: number;
+  items: TCartItem[];
+  paymentMethod: "cod" | "online";
 }
 
-interface DeviceData {
-  screen_resolution: string;
-  viewport_size: string;
-  color_depth: number;
-  device_pixel_ratio: number;
-  browser_language: string;
-  languages: string[];
-  device_memory?: number;
-  hardware_concurrency?: number;
-  connection_type?: string;
-  save_data?: boolean;
-  timezone: string;
-  do_not_track: boolean | string;
-}
+// ====== CONSTANTS ======
 
-interface TimingData {
-  time_since_page_load: number;
-  navigation_type?: string;
-}
+const PAGE_ROUTES = {
+  HOME: { pattern: /^\/$/i, event: "page_view" },
+  FLASH_DEALS: { pattern: /^\/flashdeals/, event: "flashdeals_view" },
+  SHOP: { pattern: /^\/products\/?$/i, event: "shop_view" },
+  NEW_ARRIVALS: { pattern: /^\/products\/(new-arrival|new)/i, event: "new_arrival_view" },
+  CAMPAIGN: { pattern: /^\/products\//i, event: "campaign_view" },
+  CATEGORY: { pattern: /^\/category\//i, event: "category_view" },
+  ABOUT: { pattern: /^\/ourstory/i, event: "about_us_view" },
+  CONTACT: { pattern: /^\/contact/i, event: "contact_view" },
+} as const;
 
-interface VisitorData {
-  external_id: string;
-  session_id: string;
-  first_visit: boolean;
-  visitor_ip: string | null;
-}
+const DEFAULT_CURRENCY = "BDT";
+const GUEST_FIRST_NAME = "Guest";
+const GUEST_LAST_NAME = "Customer";
+const STORAGE_KEYS = {
+  VISITOR_ID: "gtm_visitor_id",
+  CUSTOMER_DATA: "customerData",
+  UTM_PARAMS: "utm_params",
+  LOG_LEVEL: "gtm_log_level",
+  DEBUG_ENABLED: "gtm_debug",
+  FBCLID: "meta_fbclid",
+  FBC: "meta_fbc",
+  CACHED_IP: "cached_visitor_ip",
+} as const;
 
-// Global tracking context
-let trackingContext: TrackingContext | null = null;
-let ipDetectionComplete = false;
+// ====== LOGGER ======
 
-// Initialize tracking context
-export function initializeTracking(): void {
-  if (typeof window === "undefined") return;
+type LogLevel = "error" | "warn" | "info" | "debug";
 
-  const firstVisit = !localStorage.getItem("external_id");
-
-  trackingContext = {
-    external_id: getOrCreateExternalId(),
-    click_id: extractClickIdFromUrl(),
-    visitor_ip: null, // Will be populated asynchronously
-    user_agent: window.navigator.userAgent,
-    session_id: generateSessionId(),
-    first_visit: firstVisit,
-  };
-
-  // Get IP address asynchronously using ifconfig.me
-  getVisitorIp()
-    .then((ip) => {
-      if (trackingContext && ip) {
-        trackingContext.visitor_ip = ip;
-        ipDetectionComplete = true;
-
-        // Track IP retrieval for debugging
-        trackEvent(
-          "visitor_ip_retrieved",
-          {
-            visitor_data: getVisitorData(),
-          },
-          false
-        );
-      }
-    })
-    .catch((error) => {
-      console.warn("IP detection failed:", error);
-      ipDetectionComplete = true;
-    });
-
-  // Store UTM parameters
-  storeUtmParams();
-
-  // Store Facebook click ID if present
-  storeClickId();
-
-  // Track session start
-  trackEvent(
-    "session_start",
-    {
-      visitor_data: getVisitorData(),
-      click_data: getClickData() ? { click_data: getClickData() } : undefined,
-    },
-    false
-  );
-}
-
-// External ID management
-export function getOrCreateExternalId(): string {
-  if (typeof window === "undefined") return "server-side";
-
-  try {
-    let externalId = localStorage.getItem("external_id");
-
-    if (!externalId) {
-      externalId = generateUUID();
-      localStorage.setItem("external_id", externalId);
-      localStorage.setItem("first_visit_date", new Date().toISOString());
-
-      // Track new visitor
-      trackEvent(
-        "new_visitor",
-        {
-          visitor_data: {
-            external_id: externalId,
-            first_visit: true,
-            visitor_ip: null,
-            session_id: generateSessionId(),
-          },
-        },
-        false
-      );
-    }
-
-    return externalId;
-  } catch (error) {
-    console.warn("Failed to access localStorage, generating session external_id");
-    return generateSessionId();
-  }
-}
-
-// Click ID extraction and storage
-export function extractClickIdFromUrl(): string | null {
-  if (typeof window === "undefined") return null;
-
-  const urlParams = new URLSearchParams(window.location.search);
-
-  // Facebook Click ID parameters
-  const fbClickId = urlParams.get("fbclid");
-
-  // Other potential click ID parameters
-  const gclid = urlParams.get("gclid");
-  const ttclid = urlParams.get("ttclid");
-  const msclkid = urlParams.get("msclkid");
-
-  return fbClickId || gclid || ttclid || msclkid || null;
-}
-
-export function storeClickId(): void {
-  if (typeof window === "undefined") return;
-
-  const clickId = extractClickIdFromUrl();
-  if (clickId) {
-    try {
-      localStorage.setItem("last_click_id", clickId);
-      sessionStorage.setItem("session_click_id", clickId);
-
-      // Determine source based on click ID pattern
-      let source = "unknown";
-      if (clickId.startsWith("FB")) source = "facebook";
-      else if (clickId.startsWith("GCLID")) source = "google";
-      else if (clickId.includes("tt_")) source = "tiktok";
-      else if (clickId.includes("msclkid")) source = "microsoft";
-
-      // Also store with timestamp and metadata
-      const clickData: ClickData = {
-        id: clickId,
-        timestamp: new Date().toISOString(),
-        url: window.location.href,
-        referrer: document.referrer,
-        source: source,
-      };
-
-      localStorage.setItem("click_data", JSON.stringify(clickData));
-
-      // Track click ID captured
-      trackEvent(
-        "click_id_captured",
-        {
-          visitor_data: getVisitorData(),
-          click_data: clickData,
-        },
-        false
-      );
-    } catch (error) {
-      console.warn("Failed to store click ID:", error);
-    }
-  }
-}
-
-export function getStoredClickId(): string | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    // Prefer session click ID, then persistent
-    return sessionStorage.getItem("session_click_id") || localStorage.getItem("last_click_id");
-  } catch {
-    return null;
-  }
-}
-
-export function getClickData(): ClickData | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const clickData = localStorage.getItem("click_data");
-    return clickData ? JSON.parse(clickData) : null;
-  } catch {
-    return null;
-  }
-}
-
-// Visitor IP collection using ifconfig.me
-export async function getVisitorIp(): Promise<string | null> {
-  try {
-    const response = await fetch("https://ifconfig.me/ip", {
-      method: "GET",
-      headers: {
-        Accept: "text/plain",
-      },
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    });
-
-    if (response.ok) {
-      const ip = await response.text();
-      // Validate IP format (basic validation)
-      if (isValidIp(ip.trim())) {
-        return ip.trim();
-      } else {
-        console.warn("Invalid IP format received:", ip);
-        return null;
-      }
-    } else {
-      console.warn("ifconfig.me responded with status:", response.status);
-      return null;
-    }
-  } catch (error) {
-    console.warn("Failed to get IP from ifconfig.me:", error);
-
-    // Fallback to ipify.org
-    try {
-      const fallbackResponse = await fetch("https://api.ipify.org?format=json", {
-        signal: AbortSignal.timeout(3000),
-      });
-
-      if (fallbackResponse.ok) {
-        const data = await fallbackResponse.json();
-        if (isValidIp(data.ip)) {
-          return data.ip;
-        }
-      }
-    } catch (fallbackError) {
-      console.warn("Fallback IP service also failed:", fallbackError);
-    }
-
-    return null;
-  }
-}
-
-// Basic IP validation
-function isValidIp(ip: string): boolean {
-  // Basic IPv4 and IPv6 validation
-  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
-
-  if (ipv4Regex.test(ip)) {
-    // Validate IPv4 octets
-    const parts = ip.split(".");
-    return parts.every((part) => {
-      const num = parseInt(part, 10);
-      return num >= 0 && num <= 255;
-    });
-  }
-
-  return ipv6Regex.test(ip);
-}
-
-// Enhanced buildGtmItem with clean structure
-export function buildGtmItem(
-  product: Product,
-  variant?: Variant | null,
-  quantity: number = 1,
-  listName?: string,
-  listId?: string,
-  index?: number
-): GtmEcommerceItem {
-  const price = variant?.selling_price ?? product.variantsId?.[0]?.selling_price;
-  const itemName = variant ? `${product.name} - ${variant.name}` : product.name;
-
-  const item: GtmEcommerceItem = {
-    item_id: variant?._id ?? product._id,
-    item_name: itemName,
-    item_brand: product.brand?.name,
-    item_category: product.sub_category?.[0]?.name,
-    price: Number(price) || 0,
-    currency: product.currency,
-    quantity,
-    item_variant: variant?.name,
-    ...(listName && { item_list_name: listName }),
-    ...(listId && { item_list_id: listId }),
-    ...(typeof index === "number" && { index }),
-  };
-
-  return item;
-}
-
-// Enhanced event tracking with clean structure
-export const trackEvent = (eventName: string, eventData: Record<string, any> = {}, requireConsent: boolean = false) => {
-  if (typeof window === "undefined" || !window.dataLayer) {
-    console.warn("GTM not available - event not tracked:", eventName);
-    return;
-  }
-
-  if (requireConsent && !hasTrackingConsent()) {
-    console.log("Consent required but not granted - event not tracked:", eventName);
-    return;
-  }
-
-  // Clear previous ecommerce object
-  if (eventData.ecommerce) {
-    window.dataLayer.push({ ecommerce: null });
-  }
-
-  // Build clean data structure
-  const cleanData = buildCleanEventData(eventName, eventData);
-
-  // Push to data layer
-  window.dataLayer.push(cleanData);
-
-  // Log for development
-  if (process.env.NODE_ENV === "development") {
-    console.log("GTM Event:", eventName, cleanData);
-  }
+const DEBUG_CONFIG = {
+  enabled:
+    process.env.NODE_ENV === "development" ||
+    (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEYS.DEBUG_ENABLED) === "true"),
+  logLevel: ((typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEYS.LOG_LEVEL) : null) ||
+    "info") as LogLevel,
 };
 
-// Build clean event data structure without duplicates
-function buildCleanEventData(eventName: string, eventData: Record<string, any>): Record<string, any> {
-  const baseData = {
-    event: eventName,
-    timestamp: new Date().toISOString(),
-  };
+namespace GtmLogger {
+  const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 } as const;
+  const ICONS = { error: "❌", warn: "⚠️ ", info: "📊", debug: "🐛" } as const;
 
-  // Get all data components
-  const technicalData = {
-    device_data: getDeviceData(),
-    timing_data: getTimingData(),
-    page_data: getPageData(),
-  };
-
-  const visitorData = {
-    visitor_data: getVisitorData(),
-  };
-
-  const clickData = getClickData();
-  const utmParams = getUtmParams();
-
-  // Build clean event-specific data (remove duplicates from ecommerce items)
-  const cleanEventData = { ...eventData };
-
-  // Remove external_id and click_id from ecommerce items if present
-  if (cleanEventData.ecommerce?.items) {
-    cleanEventData.ecommerce.items = cleanEventData.ecommerce.items.map((item: any) => {
-      const { external_id, click_id, ...cleanItem } = item;
-      return cleanItem;
-    });
+  function shouldLog(level: LogLevel): boolean {
+    return LOG_LEVELS[level] <= LOG_LEVELS[DEBUG_CONFIG.logLevel] && DEBUG_CONFIG.enabled;
   }
 
-  // Remove purchase_data if it duplicates ecommerce
-  if (cleanEventData.purchase_data && cleanEventData.ecommerce) {
-    const { purchase_data, ...rest } = cleanEventData;
+  export function error(event: string, data?: unknown): void {
+    if (shouldLog("error")) {
+      console.error(`${ICONS.error} [GTM] ${event}`, data || "");
+    }
+  }
+
+  export function warn(event: string, data?: unknown): void {
+    if (shouldLog("warn")) {
+      console.warn(`${ICONS.warn} [GTM] ${event}`, data || "");
+    }
+  }
+
+  export function info(event: string, data?: unknown): void {
+    if (shouldLog("info")) {
+      console.log(`${ICONS.info} [GTM] ${event}`, data || "");
+    }
+  }
+
+  export function debug(event: string, data?: unknown): void {
+    if (shouldLog("debug")) {
+      console.log(`${ICONS.debug} [GTM] ${event}`, data || "");
+    }
+  }
+}
+
+// ====== STORAGE ABSTRACTION ======
+
+namespace StorageManager {
+  const isBrowser = () => typeof window !== "undefined";
+
+  export function get(key: string): string | null {
+    if (!isBrowser()) return null;
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      GtmLogger.warn("StorageManager.get", `Failed to access ${key}`);
+      return null;
+    }
+  }
+
+  export function set(key: string, value: string): boolean {
+    if (!isBrowser()) return false;
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      GtmLogger.warn("StorageManager.set", `Failed to set ${key}`);
+      return false;
+    }
+  }
+
+  export function getSession(key: string): string | null {
+    if (!isBrowser()) return null;
+    try {
+      return sessionStorage.getItem(key);
+    } catch (error) {
+      GtmLogger.warn("StorageManager.getSession", `Failed to access ${key}`);
+      return null;
+    }
+  }
+
+  export function setSession(key: string, value: string): boolean {
+    if (!isBrowser()) return false;
+    try {
+      sessionStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      GtmLogger.warn("StorageManager.setSession", `Failed to set ${key}`);
+      return false;
+    }
+  }
+}
+
+// ====== COOKIE MANAGER ======
+
+namespace CookieManager {
+  export function get(name: string): string | undefined {
+    if (typeof document === "undefined") return undefined;
+    try {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      return parts.length === 2 ? parts.pop()?.split(";").shift() : undefined;
+    } catch {
+      GtmLogger.debug("CookieManager.get", `Failed to read ${name}`);
+      return undefined;
+    }
+  }
+}
+
+// ====== VALIDATOR ======
+
+namespace GtmValidator {
+  export function isValidPrice(price: unknown): boolean {
+    return typeof price === "number" && price >= 0 && isFinite(price);
+  }
+
+  export function isValidQuantity(qty: unknown): boolean {
+    return typeof qty === "number" && qty > 0 && Number.isInteger(qty);
+  }
+
+  export function validateItem(item: unknown): item is GtmEcommerceItem {
+    if (typeof item !== "object" || item === null) return false;
+    const obj = item as Record<string, unknown>;
+    return !!(
+      obj.item_id &&
+      obj.item_name &&
+      isValidPrice(obj.price) &&
+      obj.currency
+    );
+  }
+
+  export function validatePurchase(
+    params: Partial<PurchaseTrackingParams>
+  ): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    if (!params.transactionId?.trim()) {
+      errors.push("Missing or empty transaction ID");
+    }
+
+    if (!Array.isArray(params.items) || params.items.length === 0) {
+      errors.push("Items array is empty or missing");
+    } else {
+      params.items.forEach((item, idx) => {
+        if (!("item_id" in item && "item_name" in item && "price" in item)) {
+          // TCartItem check
+          if (!("_id" in item && "name" in item && "price" in item)) {
+            errors.push(`Item ${idx} missing required fields`);
+          }
+        }
+        if ((item as any).price !== undefined && !isValidPrice(Number((item as any).price))) {
+          errors.push(`Item ${idx} has invalid price`);
+        }
+        if ((item as any).quantity !== undefined && !isValidQuantity((item as any).quantity)) {
+          errors.push(`Item ${idx} has invalid quantity`);
+        }
+      });
+    }
+
+    if (!isValidPrice(params.totalValue)) {
+      errors.push("Invalid total value");
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+}
+
+// ====== DATA COLLECTION HELPERS ======
+
+namespace VisitorData {
+  export function getVisitorId(): string {
+    if (typeof window === "undefined") return "unknown";
+
+    let vid = StorageManager.get(STORAGE_KEYS.VISITOR_ID);
+    if (!vid) {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        vid = crypto.randomUUID();
+      } else {
+        // Fallback for non-secure contexts where crypto is entirely unavailable
+        vid = "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+          (
+            Number(c) ^
+            (Math.floor(Math.random() * 256) & (15 >> (Number(c) / 4)))
+          ).toString(16)
+        );
+      }
+      StorageManager.set(STORAGE_KEYS.VISITOR_ID, vid);
+    }
+    return vid;
+  }
+}
+
+// ====== META CLICK ID TRACKING ======
+
+namespace MetaClickTracking {
+  /**
+   * Capture fbclid from URL params and construct _fbc cookie if missing.
+   * Should be called on every page load.
+   *
+   * _fbc format: fb.1.{timestamp}.{fbclid}
+   * See: https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/fbp-and-fbc
+   */
+  export function captureFbclid(): void {
+    if (typeof window === "undefined") return;
+
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fbclid = urlParams.get("fbclid");
+
+      if (fbclid) {
+        // Store raw fbclid in localStorage (persists across sessions)
+        StorageManager.set(STORAGE_KEYS.FBCLID, fbclid);
+        GtmLogger.info("MetaClickTracking", `Captured fbclid: ${fbclid.substring(0, 20)}...`);
+
+        // Read the _fbc cookie (set by Facebook Pixel)
+        const existingFbc = CookieManager.get("_fbc");
+        if (existingFbc) {
+          // Pixel already set _fbc — mirror it to localStorage as backup
+          StorageManager.set(STORAGE_KEYS.FBC, existingFbc);
+          GtmLogger.debug("MetaClickTracking", `_fbc cookie exists (Pixel-set): ${existingFbc.substring(0, 30)}...`);
+        } else {
+          // Pixel hasn't set _fbc yet — construct a fallback value in localStorage only
+          // We do NOT write a cookie to avoid conflicting with Facebook Pixel's cookie management
+          const constructedFbc = `fb.1.${Date.now()}.${fbclid}`;
+          StorageManager.set(STORAGE_KEYS.FBC, constructedFbc);
+          GtmLogger.info("MetaClickTracking", `No _fbc cookie from Pixel, stored fallback in localStorage: ${constructedFbc.substring(0, 30)}...`);
+        }
+      }
+    } catch (error) {
+      GtmLogger.error("MetaClickTracking.captureFbclid", error);
+    }
+  }
+
+  /**
+   * Get the best available _fbc value.
+   * Priority: cookie > localStorage > undefined
+   */
+  export function getFbc(): string | undefined {
+    return CookieManager.get("_fbc") || StorageManager.get(STORAGE_KEYS.FBC) || undefined;
+  }
+
+  /**
+   * Get the raw fbclid value from localStorage.
+   */
+  export function getFbclid(): string | undefined {
+    return StorageManager.get(STORAGE_KEYS.FBCLID) || undefined;
+  }
+
+  /**
+   * Get the _fbp cookie value.
+   */
+  export function getFbp(): string | undefined {
+    return CookieManager.get("_fbp") || undefined;
+  }
+}
+
+// ====== IP ADDRESS TRACKER ======
+
+namespace IpTracker {
+  /**
+   * Fetch visitor IP from a free API and cache it in sessionStorage.
+   * Only fetches once per session to avoid unnecessary API calls.
+   */
+  export async function fetchAndCacheIp(): Promise<void> {
+    if (typeof window === "undefined") return;
+
+    // Already cached this session?
+    const cached = StorageManager.getSession(STORAGE_KEYS.CACHED_IP);
+    if (cached) {
+      GtmLogger.debug("IpTracker", `Using cached IP: ${cached}`);
+      return;
+    }
+
+    try {
+      const response = await fetch("https://api.ipify.org?format=json", {
+        signal: AbortSignal.timeout(5000), // 5s timeout
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.ip) {
+          StorageManager.setSession(STORAGE_KEYS.CACHED_IP, data.ip);
+          GtmLogger.info("IpTracker", `Fetched and cached IP: ${data.ip}`);
+        }
+      }
+    } catch (error) {
+      // Non-critical — silently fail. IP matching is best-effort.
+      GtmLogger.debug("IpTracker", "Failed to fetch IP (non-critical)");
+    }
+  }
+
+  /**
+   * Get the cached IP address.
+   */
+  export function getIp(): string | undefined {
+    return StorageManager.getSession(STORAGE_KEYS.CACHED_IP) || undefined;
+  }
+}
+
+namespace CustomerDataManager {
+  export function extract(): Partial<UserData> {
+    const stored = StorageManager.get(STORAGE_KEYS.CUSTOMER_DATA);
+    return stored ? parseCustomerData(stored) : getGuestFallback();
+  }
+
+  function parseCustomerData(json: string): Partial<UserData> {
+    try {
+      return JSON.parse(json) as Partial<UserData>;
+    } catch (error) {
+      GtmLogger.error("CustomerDataManager.parseCustomerData", error);
+      return getGuestFallback();
+    }
+  }
+
+  function getGuestFallback(): Partial<UserData> {
     return {
-      ...baseData,
-      ...technicalData,
-      ...visitorData,
-      ...(clickData && { click_data: clickData }),
-      ...(Object.keys(utmParams).length > 0 && { utm_params: utmParams }),
-      ...rest,
+      fn: GUEST_FIRST_NAME,
+      ln: GUEST_LAST_NAME,
+    };
+  }
+}
+
+namespace BrowserIdentifiers {
+  export function collect(): {
+    external_id: string;
+    fbp?: string;
+    fbc?: string;
+    user_agent: string;
+  } {
+    return {
+      external_id: VisitorData.getVisitorId(),
+      fbp: CookieManager.get("_fbp"),
+      fbc: CookieManager.get("_fbc"),
+      user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+    };
+  }
+}
+
+// ====== ECOMMERCE PAYLOAD BUILDER ======
+
+namespace EcommercePayloadBuilder {
+  /**
+   * Build user_data object (FB Pixel advanced matching format)
+   * GTM reads: user_data.ct, user_data.ad, user_data.external_id, etc.
+   */
+  export function buildUserData(): UserData {
+    const browser = BrowserIdentifiers.collect();
+    const customer = CustomerDataManager.extract();
+
+    return {
+      external_id: browser.external_id,
+      fbp: browser.fbp,
+      fbc: browser.fbc,
+      country: "bd",
+      client_user_agent: browser.user_agent,
+      ...(customer.fn && { fn: customer.fn }),
+      ...(customer.ln && { ln: customer.ln }),
+      ...(customer.ph && { ph: customer.ph }),
+      ...(customer.ct && { ct: customer.ct }),
+      ...(customer.st && { st: customer.st }),
+      ...(customer.zp && { zp: customer.zp }),
+      ...(customer.ad && { ad: customer.ad }),
     };
   }
 
-  // Merge all data
-  return {
-    ...baseData,
-    ...technicalData,
-    ...visitorData,
-    ...(clickData && { click_data: clickData }),
-    ...(Object.keys(utmParams).length > 0 && { utm_params: utmParams }),
-    ...cleanEventData,
-  };
-}
+  /**
+   * Build the "user" object for GTM variables that read from user.* paths
+   */
+  export function buildUserObject(): Record<string, unknown> {
+    const customer = CustomerDataManager.extract();
+    const isBrowser = typeof window !== "undefined";
+    const hasNavigator = typeof navigator !== "undefined";
+    const hasScreen = typeof screen !== "undefined";
 
-// Get device data
-export function getDeviceData(): DeviceData {
-  if (typeof window === "undefined") return {} as DeviceData;
-
-  const screen = window.screen;
-  const navigator = window.navigator;
-  const connection = (window as any).connection;
-
-  return {
-    screen_resolution: `${screen.width}x${screen.height}`,
-    viewport_size: `${window.innerWidth}x${window.innerHeight}`,
-    color_depth: screen.colorDepth,
-    device_pixel_ratio: window.devicePixelRatio || 1,
-    browser_language: navigator.language,
-    languages: navigator.languages as string[],
-    device_memory: (navigator as any).deviceMemory,
-    hardware_concurrency: (navigator as any).hardwareConcurrency,
-    connection_type: connection?.effectiveType,
-    save_data: connection?.saveData,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    do_not_track: navigator.doNotTrack === "1",
-  };
-}
-
-// Get timing data
-export function getTimingData(): TimingData {
-  if (typeof window === "undefined") return { time_since_page_load: 0 };
-
-  return {
-    time_since_page_load: performance.now(),
-    navigation_type: (() => {
-      const navEntry = performance.getEntriesByType("navigation")[0];
-      if (navEntry && "type" in navEntry) {
-        return (navEntry as PerformanceNavigationTiming).type;
-      }
-      return undefined;
-    })(),
-  };
-}
-
-// Get page data
-export function getPageData(): PageData {
-  if (typeof window === "undefined") return {} as PageData;
-
-  return {
-    url: window.location.href,
-    path: window.location.pathname,
-    search: window.location.search,
-    title: document.title,
-    referrer: document.referrer,
-  };
-}
-
-// Get visitor data
-export function getVisitorData(): VisitorData {
-  const context = getTrackingContext();
-  return {
-    external_id: context?.external_id || "unknown",
-    session_id: context?.session_id || "unknown",
-    first_visit: context?.first_visit || false,
-    visitor_ip: context?.visitor_ip || null,
-  };
-}
-
-// Get complete tracking context
-export function getTrackingContext(): TrackingContext | null {
-  if (!trackingContext) {
-    initializeTracking();
+    return {
+      email: customer.email || undefined,
+      country: "bd",
+      device: isBrowser ? (window.innerWidth <= 768 ? "mobile" : "desktop") : undefined,
+      platform: hasNavigator ? navigator.platform : undefined,
+      screen: hasScreen
+        ? { height: screen.height, width: screen.width }
+        : undefined,
+      location: { lat: undefined, lng: undefined },
+    };
   }
 
-  // Ensure we have the latest click ID and IP
-  if (trackingContext) {
-    const currentClickId = extractClickIdFromUrl();
-    if (currentClickId && currentClickId !== trackingContext.click_id) {
-      trackingContext.click_id = currentClickId;
-      storeClickId();
-    }
+  /**
+   * Build customer_details for ecommerce.customer_details.* path
+   */
+  export function buildCustomerDetails(): Record<string, string> | undefined {
+    const customer = CustomerDataManager.extract();
+    const name = [customer.fn, customer.ln].filter(Boolean).join(" ");
+    const phone = customer.ph;
+
+    if (!name && !phone) return undefined;
+
+    return {
+      ...(name && { name }),
+      ...(phone && { phone }),
+    };
   }
 
-  return trackingContext;
-}
+  /**
+   * Safely convert any value to a valid number.
+   * Returns 0 for NaN, undefined, null, or non-finite values.
+   */
+  function safeNumber(val: unknown): number {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : 0;
+  }
 
-// Wait for IP detection to complete (useful for critical events)
-export async function waitForIpDetection(): Promise<void> {
-  if (ipDetectionComplete) return;
+  export function buildEcommerceEvent(
+    items: TCartItem[] | GtmEcommerceItem[],
+    totalValue: number,
+    extras?: Record<string, unknown>
+  ): Record<string, unknown> {
+    const normalizedItems = items.map(normalizeItem);
+    const customerDetails = buildCustomerDetails();
+    const safeValue = safeNumber(totalValue);
 
-  return new Promise((resolve) => {
-    const checkInterval = setInterval(() => {
-      if (ipDetectionComplete) {
-        clearInterval(checkInterval);
-        resolve();
-      }
-    }, 100);
+    return {
+      currency: DEFAULT_CURRENCY,
+      value: safeValue > 0 ? safeValue : safeNumber(normalizedItems.reduce((s, i) => s + i.price * i.quantity, 0)),
+      items: normalizedItems,
+      ...(customerDetails && { customer_details: customerDetails }),
+      ...extras,
+    };
+  }
 
-    // Timeout after 3 seconds
-    setTimeout(() => {
-      clearInterval(checkInterval);
-      resolve();
-    }, 3000);
-  });
-}
-
-// Enhanced specific event helpers with clean structure
-export const trackPageView = (path: string) => {
-  trackEvent("page_view", {
-    page_path: path,
-    page_title: document.title,
-    page_location: window.location.href,
-  });
-};
-
-export const trackProductView = (product: Product, variant?: Variant | null) => {
-  const item = buildGtmItem(product, variant);
-
-  if (!product) return;
-
-  trackEvent("view_item", {
-    ecommerce: {
-      currency: product.currency,
-      value: item.price * (item.quantity || 1),
-      items: [item],
-    },
-  });
-};
-
-export const trackAddToCart = (item: TCartItem) => {
-  trackEvent("add_to_cart", {
-    ecommerce: {
-      currency: item.currency || "BDT",
-      value: item.price * item.quantity,
-      items: [
-        {
-          item_id: item._id,
-          item_name: item.name,
-          price: Number(item.price),
-          quantity: item.quantity,
-          item_variant: item.variantLabel,
-          currency: item.currency || "BDT",
-        },
-      ],
-    },
-  });
-};
-
-export const trackRemoveFromCart = (item: TCartItem) => {
-  trackEvent("remove_from_cart", {
-    ecommerce: {
-      currency: item.currency || "BDT",
-      value: item.price * item.quantity,
-      items: [
-        {
-          item_id: item._id,
-          item_name: item.name,
-          price: Number(item.price),
-          quantity: item.quantity,
-          item_variant: item.variantLabel,
-          currency: item.currency || "BDT",
-        },
-      ],
-    },
-  });
-};
-
-export const trackBeginCheckout = (items: TCartItem[], totalValue: number) => {
-  trackEvent("begin_checkout", {
-    ecommerce: {
-      currency: items[0]?.currency || "BDT",
-      value: totalValue,
-      items: items.map((item) => ({
+  function normalizeItem(
+    item: TCartItem | GtmEcommerceItem
+  ): Record<string, unknown> & { price: number; quantity: number } {
+    if ("_id" in item) {
+      // TCartItem
+      return {
         item_id: item._id,
         item_name: item.name,
-        price: Number(item.price),
-        quantity: item.quantity,
-        item_variant: item.variantLabel,
-        currency: item.currency || "BDT",
-      })),
-    },
-  });
-};
+        price: safeNumber(item.price),
+        currency: (item as any).currency || DEFAULT_CURRENCY,
+        quantity: item.quantity || 1,
+        ...(item.variantLabel && { item_variant: item.variantLabel }),
+        ...((item as any).category && { item_category: (item as any).category }),
+        ...((item as any).brand && { item_brand: (item as any).brand }),
+      };
+    }
+    // GtmEcommerceItem
+    return {
+      item_id: item.item_id,
+      item_name: item.item_name,
+      price: safeNumber(item.price),
+      currency: item.currency || DEFAULT_CURRENCY,
+      quantity: item.quantity ?? 1,
+      ...(item.item_variant && { item_variant: item.item_variant }),
+      ...(item.item_category && { item_category: item.item_category }),
+      ...(item.item_brand && { item_brand: item.item_brand }),
+    };
+  }
+}
 
-// Enhanced purchase tracking with clean structure
-export const trackPurchase = async (
-  transactionId: string,
+// ====== DATALAYER PUSH ======
+
+function pushToDataLayer(eventName: string, data: Record<string, unknown>): void {
+  if (typeof window === "undefined") return;
+
+  window.dataLayer = window.dataLayer || [];
+
+  // Clear ecommerce object before pushing new ecommerce data
+  if (data.ecommerce) {
+    window.dataLayer.push({ ecommerce: null });
+  }
+
+  // Build all 3 user data path groups for GTM variable alignment
+  const userData = EcommercePayloadBuilder.buildUserData();
+  const userObject = EcommercePayloadBuilder.buildUserObject();
+  const browser = BrowserIdentifiers.collect();
+
+  // Add customer source
+  const customerSource = getCustomerSource();
+
+  const payload: Record<string, unknown> = {
+    event: eventName,
+    ...data,
+    // Path Group 1: user_data.* (FB advanced matching + city/address)
+    user_data: userData,
+    // Path Group 2: user.* (email, country, device, platform, screen, location)
+    user: userObject,
+    // Path Group 3: visitor_data.* (external_id, visitor_ip)
+    visitor_data: {
+      external_id: browser.external_id,
+    },
+    // Customer source tracking
+    customer_source: customerSource,
+  };
+
+  window.dataLayer.push(payload);
+  GtmLogger.info(eventName, payload);
+}
+
+// ====== PAGE TRACKING ======
+
+function getPageEvent(path: string): string | null {
+  for (const route of Object.values(PAGE_ROUTES)) {
+    if (route.pattern.test(path)) {
+      return route.event;
+    }
+  }
+  return null;
+}
+
+/**
+ * Track page view with automatic event mapping based on route
+ */
+export function trackPageView(
+  path: string,
+  title?: string,
+  location?: string
+): void {
+  if (typeof window === "undefined") return;
+
+  const eventName = getPageEvent(path);
+  if (!eventName) return;
+
+  pushToDataLayer(eventName, {
+    page_path: path,
+    page_title: title || (typeof document !== "undefined" ? document.title : ""),
+    page_location: location || (typeof window !== "undefined" ? window.location.href : ""),
+  });
+}
+
+// ====== PRODUCT BROWSING EVENTS ======
+
+/**
+ * Track when a product is viewed
+ */
+export function trackProductView(product: Product, variant?: Variant | null): void {
+  if (!product) return;
+
+  const item = buildGtmItem(product, variant);
+
+  pushToDataLayer("ViewContent", {
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent([item], item.price),
+  });
+}
+
+/**
+ * Track when a list of related products is viewed.
+ * Accepts either Product[] or pre-built GtmEcommerceItem[].
+ */
+export function trackViewRelatedItemList(
+  items: Product[] | GtmEcommerceItem[],
+  listId: string
+): void {
+  if (!items || items.length === 0) return;
+
+  // Check if items are Product[] or GtmEcommerceItem[]
+  const isProductArray = "_id" in items[0] && "name" in items[0] && "variantsId" in items[0];
+
+  let gtmItems: GtmEcommerceItem[];
+
+  if (isProductArray) {
+    // Product[] - build items
+    gtmItems = (items as Product[]).map((product, index) => {
+      const defaultVariant = product.variantsId?.[0];
+      return buildGtmItem(product, defaultVariant, 1, "Related Products", listId, index + 1);
+    });
+  } else {
+    // Already GtmEcommerceItem[]
+    gtmItems = items as GtmEcommerceItem[];
+  }
+
+  const totalValue = gtmItems.reduce((sum, item) => sum + item.price, 0);
+
+  pushToDataLayer("ViewRelatedItemList", {
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(gtmItems, totalValue, {
+      item_list_id: listId,
+      item_list_name: "Related Products",
+    }),
+  });
+}
+
+/**
+ * Track when a product is added to cart
+ */
+export function trackAddToCart(item: TCartItem): void {
+  if (!item) return;
+
+  pushToDataLayer("AddToCart", {
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(
+      [item],
+      item.price * item.quantity
+    ),
+  });
+}
+
+/**
+ * Track when a product is removed from cart
+ */
+export function trackRemoveFromCart(item: TCartItem): void {
+  if (!item) return;
+
+  pushToDataLayer("RemoveFromCart", {
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(
+      [item],
+      item.price * item.quantity
+    ),
+  });
+}
+
+/**
+ * Track when quantity is updated in cart
+ */
+export function trackUpdateItemQuantity(item: TCartItem, newQuantity: number): void {
+  const oldQuantity = item.quantity;
+  const diff = newQuantity - oldQuantity;
+
+  if (diff === 0) return;
+
+  const eventName = "CustomizeProduct";
+  const absDiff = Math.abs(diff);
+  const action = diff > 0 ? "increase" : "decrease";
+
+  const baseItem = EcommercePayloadBuilder.buildEcommerceEvent(
+    [{ ...item, quantity: newQuantity }],
+    item.price * newQuantity
+  );
+
+  if (baseItem.items && Array.isArray(baseItem.items) && baseItem.items[0]) {
+    (baseItem.items[0] as any).old_quantity = oldQuantity;
+    (baseItem.items[0] as any).quantity_diff = absDiff;
+    (baseItem.items[0] as any).quantity_action = action;
+  }
+
+  pushToDataLayer(eventName, {
+    ecommerce: baseItem,
+  });
+}
+
+/**
+ * Track product search
+ */
+export function trackSearch(searchTerm: string): void {
+  if (!searchTerm?.trim()) return;
+
+  pushToDataLayer("Search", {
+    search_term: searchTerm,
+  });
+}
+
+/**
+ * Track when a product is added to wishlist
+ */
+export function trackAddToWishlist(
+  product: Product,
+  variant?: Variant | null
+): void {
+  if (!product) return;
+
+  const item = buildGtmItem(product, variant);
+
+  pushToDataLayer("AddToWishlist", {
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent([item], item.price),
+  });
+}
+
+// ====== CHECKOUT EVENTS ======
+
+/**
+ * Track checkout initiation
+ */
+
+export function trackBeginCheckout(
+  items: TCartItem[],
+  totalValue: number
+): void {
+  if (!items?.length || !totalValue) return;
+
+  // ইভেন্ট নাম পরিবর্তন করে "InitiateCheckout" করা হয়েছে
+  pushToDataLayer("InitiateCheckout", {
+    percent: 50,
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(items, totalValue),
+  });
+}
+/**
+ * Track when shipping information is added
+ */
+export function trackAddShippingInfo(
   items: TCartItem[],
   totalValue: number,
-  shippingValue: number = 0,
-  customerName: string,
-  customerPhone?: string,
-  deliveryArea?: string,
-  deliveryAddress?: string,
-  paymentMethod?: string,
+  shippingTier: string,
   coupon?: string
-) => {
-  if (!items.length) {
-    console.error("No items provided for purchase tracking");
+): void {
+  if (!items?.length) return;
+
+  pushToDataLayer("AddShippingInfo", {
+    percent: 100,
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(items, totalValue, {
+      coupon,
+      shipping_tier: shippingTier,
+    }),
+  });
+}
+
+/**
+ * Track when payment information is added
+ */
+export function trackAddPaymentInfo(
+  items: TCartItem[],
+  totalValue: number,
+  paymentMethod: "cod" | "online",
+  coupon?: string
+): void {
+  if (!items?.length) return;
+
+  pushToDataLayer("AddPaymentInfo", {
+    percent: 100,
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(items, totalValue, {
+      coupon,
+      payment_type: paymentMethod,
+    }),
+  });
+}
+
+// ====== PURCHASE EVENTS ======
+
+/**
+ * Track a purchase - use this for completed transactions.
+ * Uses object-based params (breaking change from old positional args).
+ */
+export function trackPurchase(params: PurchaseTrackingParams): void {
+  const validation = GtmValidator.validatePurchase(params);
+
+  if (!validation.valid) {
+    GtmLogger.error("trackPurchase validation failed", validation.errors);
     return;
   }
 
-  // Wait for IP detection to complete for purchase events
-  await waitForIpDetection();
+  const { transactionId, items, totalValue, tax = 0, shipping = 0, coupon, customer, paymentMethod } = params;
 
-  trackEvent("purchase", {
-    ecommerce: {
+  pushToDataLayer("Purchase", {
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(items, totalValue, {
       transaction_id: transactionId,
-      value: totalValue,
-      tax: 0,
-      shipping: shippingValue,
-      currency: items[0]?.currency || "BDT",
-      coupon: coupon,
+      tax,
+      shipping,
+      coupon,
       payment_method: paymentMethod,
-      customer_details: {
-        name: customerName,
-        phone: customerPhone,
-        delivery_area: deliveryArea,
-        delivery_address: deliveryAddress,
+    }),
+    ...(customer && {
+      customer_data: {
+        email: customer.email,
+        phone_number: customer.phone,
+        first_name: customer.name?.split(" ")[0],
+        last_name: customer.name?.split(" ").slice(1).join(" "),
+        city: customer.city,
+        country: customer.country || "BD",
       },
-      items: items.map((item) => ({
-        item_id: item._id,
-        item_name: item.name,
-        price: Number(item.price),
-        quantity: item.quantity,
-        item_variant: item.variantLabel,
-        currency: item.currency || "BDT",
-      })),
-    },
-  });
-};
-
-export const trackUpdateItemQuantity = (item: TCartItem, newQuantity: number) => {
-  trackEvent("update_item_quantity", {
-    ecommerce: {
-      currency: item.currency || "BDT",
-      value: item.price * newQuantity,
-      items: [
-        {
-          item_id: item._id,
-          item_name: item.name,
-          price: Number(item.price),
-          quantity: newQuantity,
-          item_variant: item.variantLabel,
-          currency: item.currency || "BDT",
-        },
-      ],
-    },
-  });
-};
-
-export const trackViewRelatedItemList = (
-  items: GtmEcommerceItem[],
-  listId: string,
-  listName: string = "Related Products"
-) => {
-  trackEvent("view_related_item_list", {
-    ecommerce: {
-      item_list_id: listId,
-      item_list_name: listName,
-      items: items,
-    },
-  });
-};
-
-// Utility functions
-function generateUUID(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0;
-    const v = c == "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
+    }),
   });
 }
 
-function generateSessionId(): string {
-  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+/**
+ * Track when an order is placed (COD or Online)
+ */
+export function trackOrderPlace(params: OrderPlacementParams): void {
+  if (!params.orderId || !params.items?.length || !params.totalValue) {
+    GtmLogger.error("trackOrderPlace missing required params");
+    return;
+  }
+
+  const { orderId, totalValue, items, paymentMethod } = params;
+
+  pushToDataLayer("OrderPlace", {
+    order_id: orderId,
+    value: totalValue,
+    currency: DEFAULT_CURRENCY,
+    payment_method: paymentMethod,
+    percent: 100,
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(items, totalValue),
+  });
 }
 
-// Consent management utilities
-export const hasTrackingConsent = (): boolean => {
-  try {
-    if (typeof window === "undefined") return false;
-    return (
-      localStorage.getItem("tracking_consent") === "granted" || localStorage.getItem("cookie_consent") === "granted"
-    );
-  } catch {
-    return false;
+/**
+ * Track COD order placement
+ */
+export function trackCODPlace(orderId: string, totalValue: number, items: TCartItem[]): void {
+  if (!orderId || !items?.length || totalValue <= 0) {
+    GtmLogger.error("trackCODPlace invalid params");
+    return;
   }
-};
 
-export const setTrackingConsent = (
-  granted: boolean,
-  settings = {
-    analytics: true,
-    advertising: true,
-    functional: true,
+  pushToDataLayer("CodOrder", {
+    order_id: orderId,
+    value: totalValue,
+    currency: DEFAULT_CURRENCY,
+    payment_method: "cod",
+    percent: 100,
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(items, totalValue),
+  });
+}
+
+/**
+ * Track successful online payment
+ */
+export function trackOnlinePaymentSuccess(
+  orderId: string,
+  transactionId: string,
+  totalValue: number,
+  items: TCartItem[] | any[]
+): void {
+  if (!orderId || !transactionId || !items?.length || totalValue <= 0) {
+    GtmLogger.error("trackOnlinePaymentSuccess invalid params");
+    return;
   }
-) => {
-  try {
-    localStorage.setItem("tracking_consent", granted ? "granted" : "denied");
 
-    // Update GTM consent settings
-    if (typeof window !== "undefined") {
-      window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push({
-        event: "consent_update",
-        analytics_storage: settings.analytics && granted ? "granted" : "denied",
-        ad_storage: settings.advertising && granted ? "granted" : "denied",
-        functionality_storage: settings.functional && granted ? "granted" : "denied",
-      });
+  pushToDataLayer("OnlinePaymentSuccess", {
+    order_id: orderId,
+    transaction_id: transactionId,
+    value: totalValue,
+    currency: DEFAULT_CURRENCY,
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(items, totalValue, {
+      transaction_id: transactionId,
+    }),
+  });
+}
 
-      // Also update via gtag if available
-      if (window.gtag) {
-        window.gtag("consent", "update", {
-          analytics_storage: settings.analytics && granted ? "granted" : "denied",
-          ad_storage: settings.advertising && granted ? "granted" : "denied",
-          functionality_storage: settings.functional && granted ? "granted" : "denied",
-        });
-      }
-    }
+/**
+ * Track admin confirmation of COD order
+ */
+export function trackAdminCODPurchase(
+  orderId: string,
+  totalValue: number,
+  items: any[],
+  customer?: CustomerDetails
+): void {
+  const validation = GtmValidator.validatePurchase({
+    transactionId: orderId,
+    items,
+    totalValue,
+  });
 
-    // Track the consent event
-    trackEvent(
-      granted ? "consent_granted" : "consent_denied",
-      {
-        consent_settings: settings,
-      },
-      false // Don't require consent to track consent events
-    );
-
-    return true;
-  } catch (e) {
-    console.error("Failed to set tracking consent:", e);
-    return false;
+  if (!validation.valid) {
+    GtmLogger.error("trackAdminCODPurchase validation failed", validation.errors);
+    return;
   }
-};
 
-// UTM Parameter Storage
-export function storeUtmParams() {
+  pushToDataLayer("AdminConfirmCod", {
+    ecommerce: EcommercePayloadBuilder.buildEcommerceEvent(items, totalValue, {
+      transaction_id: orderId,
+    }),
+    ...(customer && { customer_data: customer }),
+  });
+}
+
+/**
+ * Track failed online payment
+ */
+export function trackOnlinePaymentFail(orderId: string, errorMessage: string): void {
+  if (!orderId) return;
+
+  pushToDataLayer("OnlinePaymentFail", {
+    order_id: orderId,
+    error_message: errorMessage,
+  });
+}
+
+/**
+ * Track order cancellation
+ */
+export function trackOrderCancel(orderId: string, reason?: string): void {
+  if (!orderId) return;
+
+  pushToDataLayer("OrderCancel", {
+    order_id: orderId,
+    cancel_reason: reason,
+  });
+}
+
+// ====== CUSTOMER DATA & UTM HELPERS ======
+
+/**
+ * Store customer data for use in subsequent events
+ */
+export function storeCustomerData(data: {
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  city?: string;
+}): void {
+  if (!data.name?.trim() || !data.phone?.trim()) {
+    GtmLogger.warn("storeCustomerData", "Missing required name or phone");
+    return;
+  }
+    // 🔴 FIXED: Phone number formatting logic for BD (Adds 88 if not present)
+  let formattedPhone = data.phone.trim();
+  if (formattedPhone.startsWith("01")) {
+    formattedPhone = "88" + formattedPhone;
+  } else if (formattedPhone.startsWith("+8801")) {
+    formattedPhone = formattedPhone.substring(1); // Remove '+' just keep '8801...'
+  }
+
+  const nameParts = data.name.trim().split(" ");
+  const fn = nameParts[0];
+  const ln = nameParts.slice(1).join(" ") || GUEST_LAST_NAME;
+
+  const customerData = {
+    fn,
+    ln,
+    ph: formattedPhone,
+    email: data.email,
+    ct: data.city || "Dhaka",
+    ad: data.address,
+    st: "",
+    zp: "",
+  };
+
+  // 🔴 FIXED: Changed to localStorage (StorageManager.set) from setSession
+  StorageManager.set(STORAGE_KEYS.CUSTOMER_DATA, JSON.stringify(customerData));
+}
+
+/**
+ * Capture and store UTM parameters from URL
+ */
+export function storeUtmParams(): void {
   if (typeof window === "undefined") return;
+
   const params = new URLSearchParams(window.location.search);
-  const utmKeys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id"];
+  const utmKeys = [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "utm_id",
+  ];
 
   utmKeys.forEach((key) => {
     const val = params.get(key);
@@ -768,7 +1041,6 @@ export function storeUtmParams() {
     }
   });
 
-  // Store referrer if not already set
   const currentReferrer = document.referrer;
   if (currentReferrer && !localStorage.getItem("initial_referrer")) {
     localStorage.setItem("initial_referrer", currentReferrer);
@@ -776,55 +1048,189 @@ export function storeUtmParams() {
   }
 }
 
-export function getUtmParams() {
+export function getUtmParams(): Record<string, string> {
   if (typeof window === "undefined") return {};
-  const keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id"];
+
+  const keys = [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "utm_id",
+  ];
   const utms: Record<string, string> = {};
+
   keys.forEach((key) => {
     const val = localStorage.getItem(key);
     if (val) utms[key] = val;
   });
+
   return utms;
 }
 
-// Export tracking context utilities
-export function getExternalId(): string | null {
-  return getTrackingContext()?.external_id || null;
+// ====== ITEM BUILDER ======
+
+/**
+ * Normalize product and variant into GTM ecommerce item format.
+ * Adapted for shoppersbd Product types (sub_category as array of objects, finalPrice).
+ */
+export function buildGtmItem(
+  product: Product,
+  variant?: Variant | null,
+  quantity: number = 1,
+  listName?: string,
+  listId?: string,
+  index?: number
+): GtmEcommerceItem {
+  const effectiveVariant = variant || product.variantsId?.[0];
+  const finalPrice = Number(effectiveVariant?.finalPrice ?? product.finalPrice ?? 0);
+  const originalPrice = Number(effectiveVariant?.selling_price ?? product.selling_price) || 0;
+  const discount = finalPrice < originalPrice ? originalPrice - finalPrice : 0;
+  const itemName = variant ? `${product.name} - ${variant.name}` : product.name;
+  const stock = variant ? variant.variants_stock : product.total_stock;
+  const availability = stock > 0 ? "in_stock" : "out_of_stock";
+
+  return {
+    item_id: variant?._id ?? product._id,
+    item_name: itemName,
+    item_brand: product.brand?.name,
+    item_category: product.sub_category?.[0]?.name,
+    price: finalPrice,
+    currency: product.currency || DEFAULT_CURRENCY,
+    quantity,
+    item_variant: variant?.name,
+    discount,
+    item_sku: variant?.sku || variant?.barcode || product._id,
+    item_condition: variant?.condition || "new",
+    item_availability: availability,
+    ...(listName && { item_list_name: listName }),
+    ...(listId && { item_list_id: listId }),
+    ...(typeof index === "number" && { index }),
+  };
 }
 
-export function getCurrentClickId(): string | null {
-  return getTrackingContext()?.click_id || null;
+// ====== CONSENT MANAGEMENT ======
+// These are kept for backward compatibility with ConsentManager component
+
+declare global {
+  interface Window {
+    gtag?: (...args: unknown[]) => void;
+  }
 }
 
-export function getVisitorIpAddress(): string | null {
-  return getTrackingContext()?.visitor_ip || null;
+export const hasTrackingConsent = (): boolean => {
+  try {
+    if (typeof window === "undefined") return false;
+    return (
+      localStorage.getItem("tracking_consent") === "granted" ||
+      localStorage.getItem("cookie_consent") === "granted"
+    );
+  } catch {
+    return false;
+  }
+};
+
+export const setTrackingConsent = (
+  granted: boolean,
+  settings = { analytics: true, advertising: true, functional: true },
+): boolean => {
+  try {
+    localStorage.setItem("tracking_consent", granted ? "granted" : "denied");
+    localStorage.setItem("consent_settings", JSON.stringify(settings));
+
+    if (typeof window !== "undefined") {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: "consent_update",
+        analytics_storage: settings.analytics && granted ? "granted" : "denied",
+        ad_storage: settings.advertising && granted ? "granted" : "denied",
+        functionality_storage:
+          settings.functional && granted ? "granted" : "denied",
+      });
+
+      if (window.gtag) {
+        window.gtag("consent", "update", {
+          analytics_storage:
+            settings.analytics && granted ? "granted" : "denied",
+          ad_storage: settings.advertising && granted ? "granted" : "denied",
+          functionality_storage:
+            settings.functional && granted ? "granted" : "denied",
+        });
+      }
+    }
+
+    pushToDataLayer(granted ? "consent_granted" : "consent_denied", {
+      consent_settings: settings,
+    });
+
+    return true;
+  } catch (e) {
+    console.error("Failed to set consent:", e);
+    return false;
+  }
+};
+
+/**
+ * Generic trackEvent - pushes to dataLayer only (no CAPI).
+ * Kept for backward compatibility with ConsentManager.
+ */
+export const trackEvent = (
+  eventName: string,
+  eventData: Record<string, unknown> = {},
+  _requireConsent?: boolean,
+): void => {
+  pushToDataLayer(eventName, eventData);
+};
+
+/**
+ * getUserContext stub - returns basic visitor info.
+ * Kept for backward compatibility with ConsentManager.
+ */
+export function getUserContext(): Record<string, unknown> {
+  return {
+    external_id: VisitorData.getVisitorId(),
+    user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+  };
 }
 
-export function getSessionId(): string | null {
-  return getTrackingContext()?.session_id || null;
+/**
+ * Get visitor's external ID
+ */
+export function getExternalId(): string {
+  return VisitorData.getVisitorId();
 }
 
-// Debug utility
-export function debugTrackingInfo() {
-  const context = getTrackingContext();
-  console.group("GTM Tracking Debug Info");
-  console.log("Visitor Data:", getVisitorData());
-  console.log("Click Data:", getClickData());
-  console.log("Device Data:", getDeviceData());
-  console.log("Page Data:", getPageData());
-  console.log("UTM Params:", getUtmParams());
-  console.log("Consent Granted:", hasTrackingConsent());
-  console.log("IP Detection Complete:", ipDetectionComplete);
-  console.groupEnd();
+/**
+ * Get tracking data from cookies, navigator, localStorage, and cached IP.
+ * This is the primary function used by checkout forms to attach tracking data to order payloads.
+ * The POS/CRM uses this data to send Purchase events back to Meta CAPI via GTM Server-Side.
+ */
+export function getTrackingData() {
+  if (typeof window === "undefined") return undefined;
+
+  const clickId = MetaClickTracking.getFbc();
+  const browserId = MetaClickTracking.getFbp();
+  const fbclid = MetaClickTracking.getFbclid();
+  const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : undefined;
+  const externalId = getExternalId();
+  const ipAddress = IpTracker.getIp();
+
+  return {
+    clickId,    // _fbc cookie value (or constructed from fbclid)
+    browserId,  // _fbp cookie value
+    fbclid,     // Raw fbclid from URL params
+    ipAddress,  // Visitor's real IP from ipify
+    userAgent,  // Browser user agent
+    externalId, // Generated visitor UUID
+  };
 }
 
-// Initialize tracking when the module loads
-if (typeof window !== "undefined") {
-  // Initialize after a short delay to ensure DOM is ready
-  setTimeout(initializeTracking, 100);
-}
-
-// Export for global access in development
-if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
-  (window as any).debugGTM = debugTrackingInfo;
+/**
+ * Initialize Meta click tracking and IP fetching.
+ * Should be called once on page load (e.g., in layout.tsx useEffect).
+ */
+export function initializeTracking(): void {
+  MetaClickTracking.captureFbclid();
+  IpTracker.fetchAndCacheIp();
 }

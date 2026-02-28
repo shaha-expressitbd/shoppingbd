@@ -1,29 +1,11 @@
-// next.config.js or next.config.ts
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   images: {
+    formats: ["image/avif", "image/webp"], // modern, smaller formats
+    minimumCacheTTL: 60 * 60 * 24 * 30, // cache images for 30 days
+    deviceSizes: [320, 480, 640, 768, 1024, 1280, 1600, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "storage.calquick.app",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "cloude.calquick.app",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "res.cloudinary.com",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "securepay.sslcommerz.com",
-        pathname: "/public/image/**",
-      },
       {
         protocol: "https",
         hostname: "calquick.app",
@@ -36,13 +18,18 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "avatar.iran.liara.run",
+        hostname: "backend.calquick.app",
         pathname: "/**",
       },
       {
         protocol: "https",
-        hostname: "backend.calquick.app",
-        pathname: "/**",
+        hostname: "securepay.sslcommerz.com",
+        pathname: "/public/image/**",
+      },
+      {
+        protocol: "http",
+        hostname: "localhost:3000",
+        pathname: "/images/**",
       },
       {
         protocol: "https",
@@ -56,21 +43,19 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "cdn.cloudecalquick.xyz",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
         hostname: "cdn.backendcalquick.top",
         pathname: "/**",
       },
     ],
+    // unoptimized: true, // Temporary for debugging
   },
-
   crossOrigin: "anonymous",
   typescript: { ignoreBuildErrors: true },
-  allowedDevOrigins: ["192.168.1.108", "192.168.1.108:3000", "localhost:3000"],
-  /** ✅ Add this block */
+  allowedDevOrigins: [
+    "192.168.1.108",
+    "192.168.1.108:3000",
+    "localhost:3000",
+  ],
   env: {
     NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
     NEXT_PUBLIC_OWNER_ID: process.env.NEXT_PUBLIC_OWNER_ID,
@@ -87,4 +72,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;

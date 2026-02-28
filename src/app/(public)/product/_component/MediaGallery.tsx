@@ -1,17 +1,12 @@
-"use client";
-
-import { useState, useRef, useCallback, useEffect } from "react";
-import Image from "next/image";
-import {
-    BiChevronLeft,
-    BiChevronRight,
-    BiZoomIn,
-    BiPlay,
-    BiChevronDown,
-    BiChevronUp,
-} from "react-icons/bi";
-import { FiEye } from "react-icons/fi";
+// MediaGallery.tsx
+'use client';
+import AtomImage from "@/components/ui/atoms/image";
+import SkeletonComponent from "@/components/ui/skeleton/SkeletonComponent";
+import dynamic from 'next/dynamic';
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LiveViews } from "./Liveviews";
+
+const BiChevronRight = dynamic(() => import('react-icons/bi').then(mod => mod.BiChevronRight), { ssr: false });
 
 export interface MediaItem {
     type: "image" | "video";
@@ -24,86 +19,72 @@ interface MediaGalleryProps {
     media: MediaItem[];
     productName: string;
     stock: number;
-    selectedMediaUrl?: string;
-    isPreOrder?: boolean;
+    selectedMediaUrl?: string; // Add this prop
+    isDirectCheckout?: boolean;
 }
 
 export default function MediaGallery({
     media,
     productName,
     stock,
-    selectedMediaUrl,
-    isPreOrder,
+    selectedMediaUrl, // Include in props
+    isDirectCheckout,
 }: MediaGalleryProps) {
-    /* ------------------------------------------------------------------ */
-    /*  State & refs                                                      */
-    /* ------------------------------------------------------------------ */
-    const posterUrl = media.find((m) => m.type === "image")?.url ?? media[0].url;
+    const fallbackImage = "/assets/falback.jpg";
 
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [mainMedia, setMainMedia] = useState<MediaItem>(media[0]);
+    const initialLoadingStates = useMemo(() => {
+        const states: { [key: string]: boolean } = {};
+        media.forEach((item) => {
+            states[item._id] = true;
+        });
+        return states;
+    }, [media]);
 
-    const [isZoomed, setIsZoomed] = useState(false);
-    const [zoomPosition, setZoomPosition] = useState({ x: 0, y: 0 });
-
-    const [imageLoading, setImageLoading] = useState(media[0].type === "image");
-    const [videoLoaded, setVideoLoaded] = useState(
-        media[0].type === "video" ? false : true
-    );
-    const [isPlayingVideo, setIsPlayingVideo] = useState(
-        media[0].type === "video"
-    );
-
+    const [mediaLoading, setMediaLoading] = useState(initialLoadingStates);
+    const [playingVideos, setPlayingVideos] = useState<{ [key: string]: boolean }>({});
     const [isMobile, setIsMobile] = useState(false);
+    const [currentSlide, setCurrentSlide] = useState(0);
 
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const galleryRef = useRef<HTMLDivElement>(null);
-
+    const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
     const touchStartX = useRef(0);
     const touchEndX = useRef(0);
     const lastSlideChange = useRef<number>(0);
-    /* ------------------------------------------------------------------ */
-    /*  Helpers                                                           */
-    /* ------------------------------------------------------------------ */
-    const isSameSrc = useCallback(
-        (item: MediaItem) => item.url === mainMedia.url,
-        [mainMedia.url]
-    );
 
-    /** শুধু index বদলালেও হাইলাইট বদলাবো, কিন্তু URL একই থাকলে heavy state আপডেট করব না */
-    const changeSlide = useCallback(
-        (idx: number) => {
-            if (idx === currentIndex) return; // একই index → কিছু করার দরকার নেই
 
-            setCurrentIndex(idx);
-
-            // নতুন URL হলে পুরো স্টেট আপডেট
-            if (!isSameSrc(media[idx])) {
-                setMainMedia(media[idx]);
-                setVideoLoaded(media[idx].type === "video" ? false : true);
-                setIsPlayingVideo(media[idx].type === "video");
-                setImageLoading(media[idx].type === "image");
-            }
-        },
-        [currentIndex, media, isSameSrc]
-    );
-
-    const goToSlide = (dir: "next" | "prev") => {
-        console.log("goToSlide called with direction:", dir); // Debugging
-        const now = Date.now();
-        if (now - lastSlideChange.current < 300) return; // Ignore if called within 300ms
-        lastSlideChange.current = now;
-
-        const newIdx =
-            dir === "next"
-                ? (currentIndex + 1) % media.length
-                : (currentIndex - 1 + media.length) % media.length;
-        changeSlide(newIdx);
+    const handleVideoPlay = (itemId: string) => {
+        const video = videoRefs.current[itemId];
+        if (video) {
+            const isPlaying = playingVideos[itemId];
+            setPlayingVideos((prev) => ({ ...prev, [itemId]: !isPlaying }));
+            isPlaying ? video.pause() : video.play().catch(() => null);
+        }
     };
 
-    /* ------------------------------------------------------------------ */
-    /*  Effects                                                           */
-    /* ------------------------------------------------------------------ */
+    const goToSlide = (direction: "next" | "prev") => {
+        const now = Date.now();
+        if (now - lastSlideChange.current < 300) return;
+        lastSlideChange.current = now;
+
+        setCurrentSlide((prev) => direction === "next" ? (prev + 1) % media.length : (prev - 1 + media.length) % media.length);
+    };
+
+    const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+    const onTouchMove = (e: React.TouchEvent) => { touchEndX.current = e.touches[0].clientX; };
+    const onTouchEnd = () => {
+        const distance = touchStartX.current - touchEndX.current;
+        if (distance > 50) goToSlide("next");
+        else if (distance < -50) goToSlide("prev");
+    };
+
+    // Update current slide when selectedMediaUrl changes
+    useEffect(() => {
+        if (!selectedMediaUrl) return;
+        const idx = media.findIndex((m) => m.url === selectedMediaUrl);
+        if (idx > -1 && idx !== currentSlide) {
+            setCurrentSlide(idx);
+        }
+    }, [selectedMediaUrl, media, currentSlide]);
+
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         handleResize();
@@ -112,353 +93,212 @@ export default function MediaGallery({
     }, []);
 
     useEffect(() => {
-        if (!isSameSrc(media[0])) {
-            setMainMedia(media[0]);
-            setCurrentIndex(0);
-            setVideoLoaded(media[0].type === "video" ? false : true);
-            setIsPlayingVideo(media[0].type === "video");
-            setImageLoading(media[0].type === "image");
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        media.forEach((item) => {
+            if (item.type === "video") {
+                setPlayingVideos((prev) => ({ ...prev, [item._id]: true }));
+                const video = videoRefs.current[item._id];
+                if (video) {
+                    video.load();
+                }
+            }
+        });
     }, [media]);
 
-    useEffect(() => {
-        if (!selectedMediaUrl || selectedMediaUrl === mainMedia.url) return;
-        const idx = media.findIndex((m) => m.url === selectedMediaUrl);
-        if (idx > -1) changeSlide(idx);
-    }, [selectedMediaUrl, media, mainMedia.url, changeSlide]);
-
-    useEffect(() => {
-        if (mainMedia.type === "video" && videoRef.current) {
-            videoRef.current
-                .play()
-                .then(() => setIsPlayingVideo(true))
-                .catch(() => setIsPlayingVideo(false));
-        }
-    }, [mainMedia]);
-
-    /* Zoom (desktop) */
-    const handleImageZoom = useCallback(
-        (e: React.MouseEvent<HTMLDivElement>) => {
-            if (!isZoomed || mainMedia.type !== "image" || isMobile) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = ((e.clientX - rect.left) / rect.width) * 100;
-            const y = ((e.clientY - rect.top) / rect.height) * 100;
-            setZoomPosition({ x, y });
-        },
-        [isZoomed, mainMedia.type, isMobile]
-    );
-
-    /* Touch swipe (mobile) */
-    const onTouchStart = (e: React.TouchEvent) =>
-        (touchStartX.current = e.touches[0].clientX);
-    const onTouchMove = (e: React.TouchEvent) =>
-        (touchEndX.current = e.touches[0].clientX);
-    const onTouchEnd = () => {
-        const dist = touchStartX.current - touchEndX.current;
-        if (dist > 50 && media.length > 1) goToSlide("next");
-        if (dist < -50 && media.length > 1) goToSlide("prev");
-    };
-
-    /* ------------------------------------------------------------------ */
-    /*  Render                                                            */
-    /* ------------------------------------------------------------------ */
     return (
-        <div
-            className={`flex ${isMobile ? "flex-col" : "flex-row"
-                } gap-10 w-full ${isMobile ? "h-screen" : ""}`}
-        >
-            {/* ---------- Thumbnails (desktop) ---------- */}
-            {!isMobile && media.length > 1 && (
-                <aside className="flex flex-col w-20 md:w-24">
-                    {/* Heading */}
-                    <div className="flex flex-col items-center mb-2">
-                        <h3 className="font-semibold text-sm text-gray-800 dark:text-white flex items-center mb-1">
-                            <FiEye className="w-4 h-4 mr-2 text-primary" /> Gallery
-                        </h3>
-                        <span className="text-xs text-gray-500 dark:text-white">
-                            ({media.length})
-                        </span>
-                    </div>
+        <div className="w-full md:mt-2">
+            {/* Preload first 2 videos' metadata only */}
+            {!isMobile && media.slice(0, 2).map((item) => (
+                item.type === "video" && (
+                    <video
+                        key={item._id}
+                        src={`${item.url}`}
+                        preload="metadata"
+                        style={{ display: "none" }}
+                        onLoadedMetadata={() => setMediaLoading((prev) => ({ ...prev, [item._id]: false }))}
+                    />
+                )
+            ))}
 
-                    {/* Scroll buttons */}
-                    <div className="flex flex-col justify-center items-center space-y-2 mb-2">
-                        <button
-                            onClick={() =>
-                                galleryRef.current?.scrollBy({ top: -100, behavior: "smooth" })
-                            }
-                            className="p-1 rounded-full bg-gray-100 hover:bg-gray-200"
-                        >
-                            <BiChevronUp className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={() =>
-                                galleryRef.current?.scrollBy({ top: 100, behavior: "smooth" })
-                            }
-                            className="p-1 rounded-full bg-gray-100 hover:bg-gray-200"
-                        >
-                            <BiChevronDown className="w-4 h-4" />
-                        </button>
-                    </div>
+            {!isMobile ? (
+                <div className={media.length === 1 ? "w-full" : "grid grid-cols-2 gap-4"}>
+                    {media.map((item, index) => {
+                        const isVideo = item.type === "video";
+                        const isLoading = mediaLoading[item._id];
+                        const imageSrc = isVideo ? "" : (item.url || fallbackImage);
 
-                    {/* Thumbs list */}
-                    <div
-                        ref={galleryRef}
-                        className="flex flex-col gap-2 overflow-y-auto scrollbar-hide snap-y snap-mandatory h-[500px]"
-                    >
-                        {media.map((item, idx) => {
-                            const isActive = idx === currentIndex;
-                            return (
-                                <button
-                                    key={item._id}
-                                    onClick={() => changeSlide(idx)}
-                                    className={`relative aspect-square rounded-lg border-2 overflow-hidden shrink-0 ${isActive
-                                        ? "border-primary ring-2 ring-primary/30"
-                                        : "border-gray-200 hover:border-gray-300"
-                                        }`}
-                                >
-                                    {item.type === "image" ? (
-                                        <Image
-                                            src={item.url}
-                                            alt={`${productName} view ${idx + 1}`}
-                                            fill
-                                            className="object-cover"
-                                            onLoad={() => setImageLoading(false)}
+                        return (
+                            <div
+                                key={item._id}
+                                className={`relative ${media.length === 1 ? "w-full h-[1000px]" : "w-full h-[600px]"} bg-gray-100 rounded-lg overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow`}
+                            >
+                                {isLoading && (
+                                    <SkeletonComponent
+                                        type={isVideo ? "video" : "image"}
+                                        width="w-full"
+                                        height={media.length === 1 ? "h-[900px]" : "h-[600px]"}
+                                    />
+                                )}
+
+                                {!isVideo && (
+                                    <div className="relative w-full h-full">
+                                        <AtomImage
+                                            src={`${imageSrc}`}
+                                            alt={`${productName} view ${index + 1}`}
+                                            fallbackSrc={fallbackImage}
+                                            width="100%"
+                                            height="110%"
+                                            sizes="(max-width: 768px) 100vw, 50vw"
+                                            objectFit="cover"
+                                            loading={index < 2 ? "eager" : "lazy"} // Reduced eager loading to first 2 images
+                                            priority={index < 2} // Priority for first 2 images only
+                                            onLoad={() => setMediaLoading((prev) => ({ ...prev, [item._id]: false }))}
+                                            onError={(e) => {
+                                                console.error(`Failed to load image ${item._id}: ${imageSrc}`);
+                                                setMediaLoading((prev) => ({ ...prev, [item._id]: false }));
+                                            }}
+                                            className="absolute inset-0"
+                                            decoding="async" // Optimize image decoding performance
+                                            variant="large"
                                         />
-                                    ) : (
-                                        <div className="relative w-full h-full flex items-center justify-center bg-black/5">
-                                            <video
-                                                src={item.url}
-                                                className="absolute inset-0 w-full h-full object-cover"
-                                                muted
-                                                loop
-                                                playsInline
+                                        {/* <AtomImage
+                                            src={`${imageSrc}`}
+                                            alt={`${productName} view ${index + 1}`}
+                                            fallbackSrc={fallbackImage}
+                                            width="100%"
+                                            height="100%"
+                                            sizes="(max-width: 768px) 100vw, 50vw"
+                                            objectFit="contain"
+                                            loading={index < 4 ? "eager" : "lazy"}
+                                            priority={index < 4}
+                                            onLoad={() => setMediaLoading((prev) => ({ ...prev, [item._id]: false }))}
+                                            onError={(e) => {
+                                                console.error(`Failed to load image ${item._id}: ${imageSrc}`);
+                                                setMediaLoading((prev) => ({ ...prev, [item._id]: false }));
+                                            }}
+                                            className="absolute inset-0 md:hidden block"
+                                        /> */}
+                                    </div>
+                                )}
+
+                                {isVideo && (
+                                    <video
+                                        ref={(el) => { videoRefs.current[item._id] = el; }}
+                                        src={`${item.url}`}
+                                        width={600}
+                                        height={media.length === 1 ? 900 : 600}
+                                        className="w-full h-full object-cover"
+                                        autoPlay={index < 2} // Auto-play only first 2 videos
+                                        loop
+                                        muted
+                                        playsInline
+                                        preload="metadata"
+                                        onLoadedMetadata={() => setMediaLoading((prev) => ({ ...prev, [item._id]: false }))}
+                                        onClick={() => handleVideoPlay(item._id)}
+                                        onError={() => console.error(`Failed to load video ${item._id}: ${item.url}`)}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div
+                    className={`relative w-full ${isDirectCheckout ? 'h-[350px] sm:h-[450px]' : 'h-screen'} bg-black overflow-hidden`}
+                    style={isDirectCheckout ? {} : { height: "calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))" }}
+                >
+                    <div className="relative w-full h-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+                        {media.map((item, index) => {
+                            const isVideo = item.type === "video";
+                            const isLoading = mediaLoading[item._id];
+                            const isActive = index === currentSlide;
+                            const imageSrc = isVideo ? "" : (item.url || fallbackImage);
+
+                            return (
+                                <div key={item._id} className={`absolute inset-0 w-full h-full transition-transform duration-300 ease-in-out ${isActive ? "translate-x-0" : index < currentSlide ? "-translate-x-full" : "translate-x-full"}`}>
+                                    {isLoading && <SkeletonComponent type={isVideo ? "video" : "image"} width="w-full" height="h-full" />}
+
+                                    {!isVideo && (
+                                        <div className="relative w-full h-full">
+                                            <AtomImage
+                                                src={`${imageSrc}`}
+                                                alt={`${productName} view ${index + 1}`}
+                                                fallbackSrc={fallbackImage}
+                                                sizes="100vw"
+                                                objectFit="cover"
+                                                loading={isActive ? "eager" : "lazy"}
+                                                priority={isActive}
+                                                onLoad={() => setMediaLoading((prev) => ({ ...prev, [item._id]: false }))}
+                                                className="absolute inset-0 blur"
                                             />
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <div className="w-6 h-6 bg-primary/90 rounded-full flex items-center justify-center">
-                                                    <BiPlay className="w-3 h-3 text-white ml-px" />
-                                                </div>
-                                            </div>
+
+                                            <AtomImage
+                                                src={`${imageSrc}`}
+                                                alt={`${productName} view ${index + 1}`}
+                                                fallbackSrc={fallbackImage}
+                                                sizes="100vw"
+                                                objectFit="contain"
+                                                loading={isActive ? "eager" : "lazy"}
+                                                priority={isActive}
+                                                onLoad={() => setMediaLoading((prev) => ({ ...prev, [item._id]: false }))}
+                                                className="absolute inset-0"
+                                                variant="large"
+                                            />
                                         </div>
                                     )}
 
-                                    {/* Active overlay */}
-                                    {isActive && (
-                                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                                            <div className="w-4 h-4 bg-primary rounded-full flex items-center justify-center">
-                                                <FiEye className="w-2 h-2 text-white" />
-                                            </div>
-                                        </div>
+                                    {isVideo && (
+                                        <video
+                                            ref={(el) => { videoRefs.current[item._id] = el; }}
+                                            src={`${item.url}`}
+                                            width={600}
+                                            height={800}
+                                            className="w-full h-full object-cover"
+                                            autoPlay={isActive}
+                                            loop
+                                            muted
+                                            playsInline
+                                            preload="metadata"
+                                            onLoadedMetadata={() => {
+                                                setMediaLoading((prev) => ({ ...prev, [item._id]: false }));
+                                                if (isActive) videoRefs.current[item._id]?.play().catch(() => null);
+                                            }}
+                                            onClick={() => handleVideoPlay(item._id)}
+                                            onError={() => console.error(`Failed to load video ${item._id}: ${item.url}`)}
+                                        />
                                     )}
-                                </button>
+                                </div>
                             );
                         })}
                     </div>
-                </aside>
-            )}
 
-            {/* ---------- Main viewer ---------- */}
-            <section className={`${isMobile ? "flex-1 w-full" : "flex-1"} relative`}>
-                {/* desktop er jonno */}
-                {isPreOrder && (
-                    <div className={`absolute -top-4 left-1/2 -translate-x-1/2 z-20 ${isMobile ? "hidden" : "block"}`}>
-                        <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg backdrop-blur-sm">
-                            Pre-Order
+                    {media.length > 1 && (
+                        <>
+                            <button onClick={() => goToSlide("prev")} className="absolute left-4 top-1/2 -translate-y-1/2 w-9 h-9 bg-primary hover:bg-primary rounded-full text-white flex items-center justify-center shadow-lg" aria-label="Previous">
+                                <BiChevronRight className="w-6 h-6 rotate-180" />
+                            </button>
+                            <button onClick={() => goToSlide("next")} className="absolute right-4 top-1/2 -translate-y-1/2 w-9 h-9 bg-primary hover:bg-primary rounded-full text-white flex items-center justify-center shadow-lg" aria-label="Next">
+                                <BiChevronRight className="w-6 h-6" />
+                            </button>
+                        </>
+                    )}
+
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex space-x-2">
+                        {media.map((_, index) => (
+                            <button key={index} onClick={() => setCurrentSlide(index)} className={`w-3 h-3 rounded-full transition-colors ${index === currentSlide ? "bg-blue-600" : "bg-white/50"}`} />
+                        ))}
+                    </div>
+
+                    <div className="absolute top-4 md:left-4 left-12 z-50">
+                        <span className={`inline-flex items-center px-3 py-1 text-sm font-bold rounded-full ${stock > 10 ? "bg-green-600" : stock > 0 ? "bg-amber-500" : "bg-red-600"} text-white`}>
+                            {stock > 10 ? `${stock} Available` : stock > 0 ? `Only ${stock} Left!` : "Out of Stock"}
                         </span>
                     </div>
-                )}
-                <div className={`${isMobile ? "flex-col h-full" : "flex-row"} flex`}>
-                    <div
-                        className={`relative bg-gray-50 overflow-hidden shadow-lg border border-gray-200 group ${isMobile ? "flex-1 w-full h-full" : "w-full max-w-lg h-[600px]"
-                            }`}
-                        onMouseEnter={() =>
-                            !isMobile && mainMedia.type === "image" && setIsZoomed(true)
-                        }
-                        onMouseLeave={() =>
-                            !isMobile && mainMedia.type === "image" && setIsZoomed(false)
-                        }
-                        onMouseMove={
-                            !isMobile && mainMedia.type === "image"
-                                ? handleImageZoom
-                                : undefined
-                        }
-                        onTouchStart={isMobile ? onTouchStart : undefined}
-                        onTouchMove={isMobile ? onTouchMove : undefined}
-                        onTouchEnd={isMobile ? onTouchEnd : undefined}
-                    >
-                        {/* ---- Pre-order badge ---- */}
-                        {/* mobile er jonon */}
-                        {isPreOrder && (
-                            <div className={`absolute z-20 ${isMobile ? "top-0 left-1/2 -translate-x-1/2" : "-top-4 left-1/2 -translate-x-1/2"}`}>
-                                <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg backdrop-blur-sm">
-                                    Pre-Order
-                                </span>
-                            </div>
-                        )}
 
-                        {/* ---- Image viewer ---- */}
-                        {mainMedia.type === "image" && (
-                            <>
-                                <Image
-                                    src={mainMedia.url}
-                                    alt={productName}
-                                    fill
-                                    priority
-                                    onLoad={() => setImageLoading(false)}
-                                    className={`object-cover duration-300 pointer-events-none ${!isMobile && isZoomed
-                                        ? "scale-150"
-                                        : !isMobile
-                                            ? "scale-105"
-                                            : ""
-                                        }`}
-                                    style={{
-                                        transformOrigin: `${zoomPosition.x}% ${zoomPosition.y}%`,
-                                    }}
-                                />
-                                {imageLoading && (
-                                    <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800/30 animate-pulse" />
-                                )}
-                                {!isMobile && isZoomed && (
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="bg-white px-4 py-2 rounded-full text-sm font-medium flex items-center shadow-lg ring-2 ring-white/50">
-                                            <BiZoomIn className="w-5 h-5 mr-2 text-primary" />
-                                            Zoomed
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
-
-                        {/* ---- Video viewer ---- */}
-                        {mainMedia.type === "video" && (
-                            <div className="relative w-full h-full flex items-center justify-center">
-                                {/* মোবাইলে পোস্টার দেখাবো ভিডিও লোড হওয়া পর্যন্ত */}
-                                {isMobile && !videoLoaded && (
-                                    <Image
-                                        src={posterUrl}
-                                        alt={`${productName} preview`}
-                                        fill
-                                        className="object-cover"
-                                        priority
-                                    />
-                                )}
-
-                                <video
-                                    ref={videoRef}
-                                    src={mainMedia.url}
-                                    className={`${isMobile
-                                        ? "w-full h-full object-cover"
-                                        : "max-w-full max-h-full object-contain"
-                                        } ${isMobile && !videoLoaded ? "opacity-0" : "opacity-100"}`}
-                                    autoPlay
-                                    loop
-                                    muted
-                                    playsInline
-                                    onLoadedData={() => {
-                                        setVideoLoaded(true);
-                                        videoRef.current?.play().catch(() => null);
-                                    }}
-                                    onClick={() =>
-                                        setIsPlayingVideo((playing) => {
-                                            const next = !playing;
-                                            next
-                                                ? videoRef.current?.play()
-                                                : videoRef.current?.pause();
-                                            return next;
-                                        })
-                                    }
-                                />
-                                {!isPlayingVideo && (
-                                    <button
-                                        onClick={() => {
-                                            setIsPlayingVideo(true);
-                                            videoRef.current?.play();
-                                        }}
-                                        className="absolute inset-0 flex items-center justify-center"
-                                        aria-label="Play video"
-                                    />
-                                )}
-                            </div>
-                        )}
-
-                        {/* ---- Stock badge ---- */}
-                        <div className={`absolute top-2 left-2 z-20 ${isPreOrder ? "top-10" : ""}`}>
-                            <span
-                                className={`inline-flex items-center px-2 py-1 text-xs font-bold rounded-full ${stock > 10
-                                    ? "bg-green-600"
-                                    : stock > 0
-                                        ? "bg-amber-500"
-                                        : "bg-red-600"
-                                    } text-white`}
-                            >
-                                {stock > 10
-                                    ? `${stock} Available`
-                                    : stock > 0
-                                        ? `Only ${stock} Left!`
-                                        : "Out of Stock"}
-                            </span>
-                        </div>
-
-                        {/* ---- Live views (mobile only) ---- */}
-                        <div className={`absolute top-2 right-2 z-20 md:hidden block ${isPreOrder ? "top-10" : ""}`}>
-                            <LiveViews initialCount={10} />
-                        </div>
-
-                        {/* ---- Mobile nav arrows & dots ---- */}
-                        {isMobile && media.length > 1 && (
-                            <>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        console.log("Previous button clicked");
-                                        goToSlide("prev");
-                                    }}
-                                    onTouchEnd={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        console.log("Previous button touch ended");
-                                        goToSlide("prev");
-                                    }}
-                                    aria-label="Previous media"
-                                    className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-primary rounded-full text-white z-50 flex items-center justify-center pointer-events-auto"
-                                >
-                                    <BiChevronLeft className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        console.log("Next button clicked");
-                                        goToSlide("next");
-                                    }}
-                                    onTouchEnd={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        console.log("Next button touch ended");
-                                        goToSlide("next");
-                                    }}
-                                    aria-label="Next media"
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-primary rounded-full text-white z-50 flex items-center justify-center pointer-events-auto"
-                                >
-                                    <BiChevronRight className="w-4 h-4" />
-                                </button>
-
-                                {/* dots */}
-                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-20">
-                                    {media.map((_, idx) => (
-                                        <div
-                                            key={idx}
-                                            className={`w-2 h-2 rounded-full ${idx === currentIndex ? "bg-white" : "bg-white/50"
-                                                }`}
-                                        />
-                                    ))}
-                                </div>
-                            </>
-                        )}
+                    <div className="absolute top-4 right-4 z-50 md:hidden block">
+                        <LiveViews initialCount={10} />
                     </div>
                 </div>
-            </section>
+            )}
         </div>
     );
 }

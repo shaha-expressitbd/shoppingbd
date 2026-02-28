@@ -12,6 +12,8 @@ interface AddToCartBtnProps {
   quantity?: number;           // ক’টি অ্যাড করবেন (default 1)
   className?: string;          // অতিরিক্ত CSS ক্লাস
   onAddToCart: () => boolean;  // প্যারেন্ট‑কন্ট্রোল্ড অ্যাকশন
+  buttonText?: string;         // কাস্টম বাটন টেক্সট
+  buttonTitle?: string;        // কাস্টম বাটন টাইটেল
 }
 
 export default function AddToCartBtn({
@@ -20,6 +22,8 @@ export default function AddToCartBtn({
   quantity = 1,
   className,
   onAddToCart,
+  buttonText = "অর্ডার করুন",
+  buttonTitle = "Add to Cart",
 }: AddToCartBtnProps) {
   const [isAdding, setIsAdding] = useState(false);   // duplicate‑click lock
 
@@ -62,14 +66,13 @@ export default function AddToCartBtn({
   /* ---------------- UI ---------------- */
   return (
     <Button
-      title="Add to Cart"
-      variant="gradient"
-      size="sm"
+      title={buttonTitle}
+      size="md"
       onClick={handleAdd}
       disabled={disabled}
-      className={className}
+      className=" bg-primary dark:bg-primary w-full h-12 text-lg"
     >
-      Add to Cart
+      {buttonText}
     </Button>
   );
 }

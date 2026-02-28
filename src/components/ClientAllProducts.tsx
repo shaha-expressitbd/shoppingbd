@@ -1,8 +1,9 @@
 "use client";
 
-import React, { Suspense } from "react";
+import React, { Suspense, useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import AllProducts from "./AllProducts";
-
+import ProductCardSkeleton from "@/components/ui/skeleton/ProductCardSkeleton"
 
 interface ClientAllProductsProps {
     initialProducts: any; // Replace 'any' with the actual type if known, e.g., Product[]
@@ -11,6 +12,21 @@ interface ClientAllProductsProps {
 export default function ClientAllProducts({
     initialProducts,
 }: ClientAllProductsProps) {
+    const [isFirstVisit, setIsFirstVisit] = useState(true);
+
+    useEffect(() => {
+        // Check if this is first visit
+        const firstVisitKey = 'client_products_first_visit';
+        const visited = localStorage.getItem(firstVisitKey);
+        if (visited === 'true') {
+            setIsFirstVisit(false);
+        } else {
+            // Mark as visited after first load
+            setTimeout(() => {
+                localStorage.setItem(firstVisitKey, 'true');
+            }, 1000);
+        }
+    }, []);
     return (
         <Suspense
             fallback={
@@ -28,36 +44,33 @@ export default function ClientAllProducts({
                                 ট্রেন্ডিং পণ্যগুলোর সাথে থাকুন সবসময় এক ধাপ এগিয়ে! আপনার ফ্যাশন, আপনার পরিচয়
                             </span>
                             <br />
-                            <span className="text-pink-400">G'lore</span>
+                            <span className="text-red-400">shoppersbd</span>
                             <span className="text-black"> এর সাথে।❤️</span>
                         </p>
                     </div>
-                    {/* <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-4 gap-2 sm:gap-2 md:gap-4 w-full max-w-[1600px] mx-auto px-2 sm:px-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-4 gap-2 sm:gap-2 md:gap-4 w-full max-w-[1600px] mx-auto px-2 sm:px-4">
                         {Array(8)
                             .fill(0)
                             .map((_, index) => (
                                 <motion.div
                                     key={`skeleton-${index}`}
-                                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    initial={isFirstVisit ? { opacity: 0, scale: 0.9, y: 20 } : { opacity: 1, scale: 1, y: 0 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    transition={{
+                                    transition={isFirstVisit ? {
                                         duration: 0.3,
                                         delay: Math.min(index * 0.03, 0.5),
                                         ease: "easeOut",
-                                    }}
+                                    } : { duration: 0 }}
                                     className="w-full"
                                 >
-                               
+                                    <ProductCardSkeleton />
                                 </motion.div>
                             ))}
-                    </div> */}
+                    </div>
                 </div>
             }
         >
-
-            <AllProducts initialProducts={initialProducts} />
-
-
+            <AllProducts initialProducts={initialProducts} isFirstVisit={isFirstVisit} />
         </Suspense>
     );
 }

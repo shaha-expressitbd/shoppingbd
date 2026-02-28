@@ -2,8 +2,7 @@
 import React from "react";
 import { Product } from "@/types/product";
 import ProductCard from "@/components/ui/organisms/product-card";
-import ProductGridSkeleton from "@/components/skeleton/ProductGridSkeleton";
-
+import ProductGridSkeleton from "@/components/ui/skeleton/ProductGridSkeleton";
 
 interface ProductGridProps {
   products: Product[];

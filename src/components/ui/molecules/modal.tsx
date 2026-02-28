@@ -127,7 +127,7 @@ const Modal: React.FC<ModalProps> = ({
             {/* Header */}
             {showHeader && (
               <div className='flex items-center justify-between p-4 bg-primary rounded-t-lg'>
-                <h2 id='modal-title' className='text-xl font-semibold text-white'>
+                <h2 id='modal-title' className='text-lg font-semibold text-white'>
                   {title}
                 </h2>
                 <Button

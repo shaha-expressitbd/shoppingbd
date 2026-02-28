@@ -6,7 +6,7 @@ import "swiper/css/autoplay";
 import { Autoplay } from "swiper/modules";
 import { useBusiness } from "@/hooks/useBusiness";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import Image from "./ui/atoms/image";
 import type { Swiper as SwiperType } from "swiper";
 
 // Define TypeScript interfaces for type safety
@@ -63,10 +63,7 @@ export default function CategorySection() {
     }, []);
 
     const getSubCategoryImage = (subcategory: SubCategory): string => {
-        if (subcategory.image?.optimizeUrl?.includes("https")) {
-            return `${subcategory.image?.optimizeUrl}`;
-        }
-        return `${process.env.NEXT_PUBLIC_IMAGE_URL}${subcategory.image?.optimizeUrl}`;
+        return subcategory.image?.optimizeUrl || DEFAULT_IMAGE;
     };
 
     const handleSubCategoryClick = (subCategoryName: string) => {
@@ -81,7 +78,7 @@ export default function CategorySection() {
                 relative w-full pt-16 pb-4 md:pb-0 md:py-6 lg:py-8 overflow-hidden transition-all duration-700
                 ${isDark
                     ? "bg-gradient-to-r from-gray-900 via-slate-900 to-gray-900"
-                    : "bg-gradient-to-r from-pink-50 via-white to-purple-50"
+                    : "bg-gradient-to-r from-red-50 via-white to-purple-50"
                 }
             `}
         >
@@ -90,7 +87,7 @@ export default function CategorySection() {
                 <div
                     className={`
                         absolute top-1/2 left-0 w-full h-32 transform -translate-y-1/2 
-                        bg-gradient-to-r from-pink-500/8 via-purple-500/8 to-pink-500/8 blur-3xl
+                        bg-gradient-to-r from-red-500/8 via-purple-500/8 to-red-500/8 blur-3xl
                     `}
                 ></div>
             </div>
@@ -137,15 +134,14 @@ export default function CategorySection() {
                                         alt={`${subcategory.name} subcategory`}
                                         fill
                                         className="object-cover rounded-full transition-all duration-700 group-hover:scale-110"
-                                        style={{ objectFit: "cover", aspectRatio: "1/1" }}
-                                        quality={85}
+                                        objectFit="cover"
                                         loading="lazy"
                                     />
                                     {/* Image Overlay */}
                                     <div
                                         className={`
                                             absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500
-                                            bg-gradient-to-br from-pink-500/30 via-purple-600/20 to-transparent rounded-full
+                                            bg-gradient-to-br from-red-500/30 via-purple-600/20 to-transparent rounded-full
                                         `}
                                     ></div>
                                 </div>
@@ -157,8 +153,8 @@ export default function CategorySection() {
                                             text-xs sm:text-sm font-semibold tracking-wide text-center leading-tight
                                             overflow-hidden text-ellipsis line-clamp-2 uppercase
                                             ${isDark
-                                                ? "text-gray-200 group-hover:text-pink-300"
-                                                : "text-gray-700 group-hover:text-pink-600"
+                                                ? "text-gray-200 group-hover:text-red-300"
+                                                : "text-gray-700 group-hover:text-red-600"
                                             }
                                         `}
                                         style={{ maxHeight: "2.8rem" }}
@@ -179,8 +175,8 @@ export default function CategorySection() {
                             className={`
                                 w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full transition-all duration-1000
                                 ${i === 2
-                                    ? "bg-gradient-to-r from-pink-500 to-purple-500 scale-125"
-                                    : "bg-pink-300/60 scale-100"
+                                    ? "bg-gradient-to-r from-red-500 to-purple-500 scale-125"
+                                    : "bg-red-300/60 scale-100"
                                 }
                             `}
                             style={{

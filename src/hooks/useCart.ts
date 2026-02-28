@@ -1,6 +1,3 @@
-import { useCallback, useMemo } from "react";
-import { useAppDispatch } from "@/lib/hooks";
-import { useAppSelector } from "./useAppSelector";
 import {
   addItem,
   clearCart,
@@ -8,22 +5,24 @@ import {
   openCart,
   removeItem,
   selectCartDiscount,
+  selectCartGrandTotal,
   selectCartItems,
   selectCartItemsCount,
   selectCartSubtotal,
-  selectCartGrandTotal,
   selectIsCartOpen,
   setDiscountAmount,
   TCartItem,
   toggleCart,
   updateQuantity,
 } from "@/lib/features/cart/cartSlice";
-import { selectPreorderItem } from "@/lib/features/preOrderCartSlice/preOrderCartSlice";
+import { useAppDispatch } from "@/lib/hooks";
 import {
   trackAddToCart,
   trackRemoveFromCart,
   trackUpdateItemQuantity,
 } from "@/utils/gtm";
+import { useCallback, useMemo } from "react";
+import { useAppSelector } from "./useAppSelector";
 
 export const useCart = () => {
   const dispatch = useAppDispatch();
@@ -35,7 +34,6 @@ export const useCart = () => {
   const rawDiscount = useAppSelector(selectCartDiscount);
   const rawGrandTotal = useAppSelector(selectCartGrandTotal);
   const rawIsOpen = useAppSelector(selectIsCartOpen);
-  const preorderItem = useAppSelector(selectPreorderItem); // Check preorder item
 
   /* ───────── memoised state ───────── */
   const { items, itemCount, subtotal, discount, grandTotal, isOpen } = useMemo(
@@ -60,16 +58,10 @@ export const useCart = () => {
   /* ───────── actions ───────── */
   const addToCart = useCallback(
     (item: TCartItem) => {
-      if (preorderItem) {
-        alert(
-          "You have a preorder item in your cart. Please complete or clear your preorder checkout before adding regular items."
-        );
-        return;
-      }
       dispatch(addItem(item));
       trackAddToCart(item);
     },
-    [dispatch, preorderItem]
+    [dispatch]
   );
 
   const removeFromCart = useCallback(
@@ -77,7 +69,7 @@ export const useCart = () => {
       const item = getItem(id, variantId);
       if (item) {
         trackRemoveFromCart(item);
-        dispatch(removeItem({ id, variantId }));
+        dispatch(removeItem({ id, variantId: variantId as string }));
       }
     },
     [dispatch, getItem]
@@ -87,7 +79,9 @@ export const useCart = () => {
     (id: string, variantId: string | undefined, quantity: number) => {
       const item = getItem(id, variantId);
       if (item) {
-        dispatch(updateQuantity({ id, variantId, quantity }));
+        dispatch(
+          updateQuantity({ id, variantId: variantId as string, quantity })
+        );
         trackUpdateItemQuantity(item, quantity);
       }
     },

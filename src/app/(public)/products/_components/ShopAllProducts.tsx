@@ -1,412 +1,427 @@
 "use client";
-import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
+
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { Product } from "@/types/product";
 import { useBusiness } from "@/hooks/useBusiness";
 import { Category } from "@/types/business";
-import ShopMobileHeader from "./mobile-header";
+import Filters from "./filters";
 import ShopDesktopHeader from "./desktop-header";
 import ShopProductsGrid from "./products-grid";
-import ShopFilters from "./filters";
-import { Pagination } from "@/components/ui/molecules/pagination";
-import Image from "next/image";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useGetProductsQuery, useGetFilterOptionsQuery } from "@/lib/api/publicApi";
+
+interface FilterOptions {
+  tags: string[];
+  conditions: string[];
+  priceRange: {
+    min: string;
+    max: string;
+  };
+  variantsValues: Array<{
+    name: string;
+    values: string[];
+  }>;
+  categories: Array<{
+    _id: string;
+    name: string;
+    products: number;
+    children: any[];
+  }>;
+}
 
 interface ShopAllProductsProps {
-  initialProducts: Product[];
+  initialProducts?: Product[];
   minPrice?: number;
   maxPrice?: number;
-  initialSearchParams?: {
-    search?: string;
-    sort?: string;
-    brand?: string;
-    minPrice?: string;
-    maxPrice?: string;
-    condition?: string;
-    category?: string;
-  };
-}
+  initialFilterOptions?: FilterOptions;
 
-function getAllDescendantIds(cat: Category): string[] {
-  let ids: string[] = [cat._id];
-  if (cat.children && cat.children.length > 0) {
-    for (const child of cat.children) {
-      ids = ids.concat(getAllDescendantIds(child));
-    }
-  }
-  return ids;
-}
-
-function expandSelectedCategories(selectedIds: string[], categories: Category[]): string[] {
-  const expanded = new Set<string>();
-  selectedIds.forEach(id => {
-    const category = findCategoryById(categories, id);
-    if (category) {
-      const descendants = getAllDescendantIds(category);
-      descendants.forEach(descId => expanded.add(descId));
-    }
-  });
-  return Array.from(expanded);
-}
-
-function findCategoryById(categories: Category[], id: string): Category | null {
-  for (const cat of categories) {
-    if (cat._id === id) return cat;
-    if (cat.children) {
-      const found = findCategoryById(cat.children, id);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-function getProductPrice(product: Product): number {
-  const v = product.variantsId?.find((x) => Number(x.variants_stock) > 0) ?? product.variantsId?.[0];
-  if (!v) return 0;
-
-  const sell = Number(v.selling_price || 0);
-  const offer = Number(v.offer_price || sell);
-  const start = v.discount_start_date ? new Date(v.discount_start_date).getTime() : 0;
-  const end = v.discount_end_date ? new Date(v.discount_end_date).getTime() : 0;
-  const now = Date.now();
-  const isOffer = offer < sell && now >= start && now <= end;
-
-  return isOffer ? offer : sell;
+  // Client-controlled search state (from parent)
+  showSearch: boolean;
+  setShowSearch: React.Dispatch<React.SetStateAction<boolean>>;
+  search: string;
+  setSearch: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export default function ShopAllProducts({
-  initialProducts,
+  initialProducts = [],
   minPrice: initialMinPrice,
   maxPrice: initialMaxPrice,
-  initialSearchParams = {},
+  initialFilterOptions,
+  showSearch,
+  setShowSearch,
+  search,
+  setSearch,
 }: ShopAllProductsProps) {
   const { businessData } = useBusiness();
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const categories: Category[] = businessData?.categories || [];
-  const productsContainerRef = useRef<HTMLDivElement>(null);
+
+  // Use initial filter options if available, otherwise fetch from API
+  const { data: filterOptions } = useGetFilterOptionsQuery(
+    {
+      isCategories: true,
+      isPriceRange: true,
+      isVariantsValues: true,
+      isConditions: true,
+      isTags: true,
+    },
+    {
+      skip: !!initialFilterOptions, // Skip query if we have initial data
+    }
+  );
+
+  const finalFilterOptions = filterOptions || initialFilterOptions;
+
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const productsContainerRef = useRef<HTMLDivElement>(null);
   const [sidebarWidth, setSidebarWidth] = useState(320);
+
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Initialize state from URL search params
-  const initialCategoryIds = searchParams.get("category") || initialSearchParams.category;
-  const initialSearchQuery = searchParams.get("search") || initialSearchParams.search || "";
-
-  const initialSelectedCats = useMemo(() => {
-    if (!initialCategoryIds) return [];
-    // Parse comma-separated category IDs from URL - these are the directly selected IDs
-    return initialCategoryIds.split(',').map(id => id.trim()).filter(id => id);
-  }, [initialCategoryIds]);
-
-  // State management
-  const [sortBy, setSortBy] = useState<"name" | "price-low" | "price-high" | "newest">(() => {
-    const sortParam = searchParams.get("sort") || initialSearchParams.sort;
-    switch (sortParam) {
-      case "name": return "name";
-      case "price-low": return "price-low";
-      case "price-high": return "price-high";
-      default: return "newest";
-    }
-  });
-
-  const [selectedCats, setSelectedCats] = useState<string[]>(initialSelectedCats);
+  const [sortBy, setSortBy] = useState<
+    "name" | "price-low" | "price-high" | "newest"
+  >("newest");
+  const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedVariants, setSelectedVariants] = useState<{ [key: string]: string[] }>({});
+
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const [allProducts, setAllProducts] = useState<Product[]>(initialProducts);
+  const [hasMorePages, setHasMorePages] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Calculate min/max price from initial products
-  const { minPrice, maxPrice } = useMemo(() => {
-    if (initialMinPrice !== undefined && initialMaxPrice !== undefined)
-      return { minPrice: initialMinPrice, maxPrice: initialMaxPrice };
-    if (initialProducts.length === 0) return { minPrice: 0, maxPrice: 10000 };
-
-    const prices = initialProducts.map(getProductPrice).filter((n) => !Number.isNaN(n));
-    return {
-      minPrice: prices.length ? Math.min(...prices) : 0,
-      maxPrice: prices.length ? Math.max(...prices) : 10000,
-    };
-  }, [initialProducts, initialMinPrice, initialMaxPrice]);
-
-  // Initialize price range from URL params or calculated values
-  const [priceRange, setPriceRange] = useState<[number, number]>(() => {
-    const urlMin = searchParams.get("minPrice") || initialSearchParams.minPrice;
-    const urlMax = searchParams.get("maxPrice") || initialSearchParams.maxPrice;
-
-    if (urlMin && urlMax) {
-      return [Number(urlMin), Number(urlMax)];
+  // RTK Query for pagination
+  const {
+    data: paginatedProducts,
+    isLoading: isLoadingProducts,
+    isFetching: isFetchingProducts,
+    error: productsError
+  } = useGetProductsQuery(
+    {
+      page: currentPage,
+      limit: 20,
+      // Add search/filter params here when implemented
+    },
+    {
+      skip: currentPage === 1 && initialProducts.length > 0, // Skip first page if we have initial data
     }
-    return [minPrice, maxPrice];
-  });
+  );
 
-  // Apply all filters and sorting to products
-  const filteredProducts = useMemo(() => {
-    let filtered = initialProducts.filter((product) => {
-      const productPrice = getProductPrice(product);
-
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const searchIn = [
-          product.name?.toLowerCase() || "",
-          product.description?.toLowerCase() || "",
-          product.brandId?.name?.toLowerCase() || "",
-          ...(product.category_group?.map((cat) => cat.name?.toLowerCase()) || []),
-          ...(product.variantsId?.map((v) => v.condition?.toLowerCase()) || []),
-        ].join(" ");
-
-        if (!searchIn.includes(query)) return false;
-      }
-
-      // Category filter
-      if (selectedCats.length > 0) {
-        const prodCatIds = (product.category_group || []).map((cat) => cat._id);
-        if (!prodCatIds.some((id) => selectedCats.includes(id))) return false;
-      }
-
-      // Price range filter
-      if (productPrice < priceRange[0] || productPrice > priceRange[1]) {
-        return false;
-      }
-
-      // Size filter
-      if (selectedSizes.length > 0) {
-        const productSizes = product.variantsId?.flatMap((v) => v.variants_values || []) ?? [];
-        if (!productSizes.some((size) => selectedSizes.includes(size))) {
-          return false;
-        }
-      }
-
-      // Brand filter from initial search params
-      if (initialSearchParams.brand && product.brandId?.name !== initialSearchParams.brand) {
-        return false;
-      }
-
-      // Condition filter from initial search params
-      if (initialSearchParams.condition && product.condition !== initialSearchParams.condition) {
-        return false;
-      }
-
-      return true;
-    });
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      const priceA = getProductPrice(a);
-      const priceB = getProductPrice(b);
-
-      switch (sortBy) {
-        case "name":
-          return (a.name || "").localeCompare(b.name || "");
-        case "price-low":
-          return priceA - priceB;
-        case "price-high":
-          return priceB - priceA;
-        case "newest":
-        default:
-          const dateA = new Date(a.createdAt || 0).getTime();
-          const dateB = new Date(b.createdAt || 0).getTime();
-          return dateB - dateA;
-      }
-    });
-
-    return filtered;
-  }, [
-    initialProducts,
-    searchQuery,
-    selectedCats,
-    categories,
-    priceRange,
-    selectedSizes,
-    sortBy,
-    initialSearchParams.brand,
-    initialSearchParams.condition
-  ]);
-
-  // Get current page products
-  const currentPageProducts = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredProducts.slice(startIndex, endIndex);
-  }, [filteredProducts, currentPage, itemsPerPage]);
-
-  // Calculate pagination values
-  const totalItems = filteredProducts.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-  // FIXED: URL update without infinite loop
+  // Detect mobile screen
   useEffect(() => {
-    // Create the target URL
-    const params = new URLSearchParams();
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
-    if (searchQuery) params.set('search', searchQuery);
-    if (sortBy !== 'newest') params.set('sort', sortBy);
-    if (selectedCats.length > 0) params.set('category', selectedCats.join(','));
-    // if (priceRange[0] !== minPrice) params.set('minPrice', priceRange[0].toString());
-    // if (priceRange[1] !== maxPrice) params.set('maxPrice', priceRange[1].toString());
-    if (currentPage > 1) params.set('page', currentPage.toString());
-
-    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
-    const currentUrl = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
-
-    // Only update if the URL has actually changed
-    if (newUrl !== currentUrl) {
-      console.log('Updating URL from:', currentUrl, 'to:', newUrl);
-      router.push(newUrl, { scroll: false });
+  // Handle paginated products loading
+  useEffect(() => {
+    if (paginatedProducts && currentPage > 1) {
+      setAllProducts(prev => {
+        // Deduplicate products by _id before adding
+        const existingIds = new Set(prev.map(p => p._id));
+        const newProducts = paginatedProducts.filter(p => !existingIds.has(p._id));
+        return [...prev, ...newProducts];
+      });
+      setHasMorePages(paginatedProducts.length === 20); // Assuming 20 is the page size
+      setIsLoadingMore(false);
     }
-  }, [searchQuery, sortBy, selectedCats, priceRange, currentPage, pathname, minPrice, maxPrice]); // REMOVED searchParams and router
+  }, [paginatedProducts, currentPage]);
 
-  // Reset to page 1 when filters change
+  // Reset products when filters change
   useEffect(() => {
-    if (currentPage === 1) return;
+    setAllProducts(initialProducts);
     setCurrentPage(1);
-  }, [searchQuery, selectedCats, priceRange, selectedSizes, sortBy, categories]);
+    setHasMorePages(true);
+  }, [initialProducts, initialFilterOptions]);
 
-  // Handle loading state for page changes
-  useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(() => setIsLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, [currentPage]);
+  // Load more products
+  const loadMoreProducts = useCallback(() => {
+    if (!isLoadingMore && hasMorePages && !isFetchingProducts) {
+      setIsLoadingMore(true);
+      setCurrentPage(prev => prev + 1);
+    }
+  }, [isLoadingMore, hasMorePages, isFetchingProducts]);
 
-  // Event handlers
-  const handleSortChange = useCallback((newSortBy: "name" | "price-low" | "price-high" | "newest") => {
-    setSortBy(newSortBy);
-  }, []);
-
-  const handleSearchChange = useCallback((newSearchQuery: string) => {
-    setSearchQuery(newSearchQuery);
-  }, []);
-
-  const handleCategoryChange = useCallback((newSelectedCats: string[]) => {
-    setSelectedCats(newSelectedCats);
-  }, []);
-
-  const handleSizeChange = useCallback((newSelectedSizes: string[]) => {
-    setSelectedSizes(newSelectedSizes);
-  }, []);
-
-  const handlePriceRangeChange = useCallback((newPriceRange: [number, number]) => {
-    setPriceRange(newPriceRange);
-  }, []);
-
-  // Reset price range when min/max price changes
-  useEffect(() => {
-    setPriceRange([minPrice, maxPrice]);
-  }, [minPrice, maxPrice]);
-
-  // Update sidebar width on resize
+  // Sidebar width
   useEffect(() => {
     const updateWidth = () => {
-      if (sidebarRef.current) {
-        setSidebarWidth(sidebarRef.current.offsetWidth);
-      }
+      if (sidebarRef.current) setSidebarWidth(sidebarRef.current.offsetWidth);
     };
-
     updateWidth();
     window.addEventListener("resize", updateWidth);
     return () => window.removeEventListener("resize", updateWidth);
   }, []);
 
-  const clearAllFilters = useCallback(() => {
+  // Price calculation - use API price range if available, fallback to calculated
+  const { minPrice: calculatedMinPrice, maxPrice: calculatedMaxPrice } = useMemo(() => {
+    if (finalFilterOptions?.priceRange) {
+      const apiMin = Number(finalFilterOptions.priceRange.min);
+      const apiMax = Number(finalFilterOptions.priceRange.max);
+      console.log('ShopAllProducts - Using API price range:', apiMin, apiMax);
+      return {
+        minPrice: apiMin,
+        maxPrice: apiMax
+      };
+    }
+    if (initialMinPrice !== undefined && initialMaxPrice !== undefined)
+      return { minPrice: initialMinPrice, maxPrice: initialMaxPrice };
+    if (allProducts.length === 0) return { minPrice: 0, maxPrice: 10000 };
+    const prices = allProducts
+      .map((p) => {
+        const v =
+          p.variantsId?.find((x) => Number(x.variants_stock) > 0) ??
+          p.variantsId?.[0];
+        if (!v) return 0;
+        const sell = Number(v.selling_price || 0);
+        const offer = Number(v.offer_price || sell);
+        const start = v.discount_start_date
+          ? new Date(v.discount_start_date).getTime()
+          : 0;
+        const end = v.discount_end_date
+          ? new Date(v.discount_end_date).getTime()
+          : 0;
+        const now = Date.now();
+        const isOffer = offer < sell && now >= start && now <= end;
+        return isOffer ? offer : sell;
+      })
+      .filter((n) => !Number.isNaN(n));
+    return {
+      minPrice: prices.length ? Math.min(...prices) : 0,
+      maxPrice: prices.length ? Math.max(...prices) : 10000,
+    };
+  }, [initialProducts, initialMinPrice, initialMaxPrice, finalFilterOptions?.priceRange, initialFilterOptions]);
+
+  console.log('ShopAllProducts - finalFilterOptions:', finalFilterOptions);
+  console.log('ShopAllProducts - calculatedMinPrice:', calculatedMinPrice, 'calculatedMaxPrice:', calculatedMaxPrice);
+
+  const [priceRange, setPriceRange] = useState<[number, number]>([
+    calculatedMinPrice,
+    calculatedMaxPrice,
+  ]);
+
+  // Update priceRange when minPrice/maxPrice change
+  useEffect(() => {
+    setPriceRange([calculatedMinPrice, calculatedMaxPrice]);
+  }, [calculatedMinPrice, calculatedMaxPrice]);
+
+  console.log('ShopAllProducts - priceRange:', priceRange);
+
+  // Remove duplicate useEffect
+
+  const filteredAndSorted = useMemo(() => {
+    return allProducts
+      .filter((product) => {
+        const price = (() => {
+          const v =
+            product.variantsId?.find((x) => Number(x.variants_stock) > 0) ??
+            product.variantsId?.[0];
+          if (!v) return 0;
+          const sell = Number(v.selling_price || 0);
+          const offer = Number(v.offer_price || sell);
+          const start = v.discount_start_date
+            ? new Date(v.discount_start_date).getTime()
+            : 0;
+          const end = v.discount_end_date
+            ? new Date(v.discount_end_date).getTime()
+            : 0;
+          const now = Date.now();
+          const isOffer = offer < sell && now >= start && now <= end;
+          return isOffer ? offer : sell;
+        })();
+        if (price < priceRange[0] || price > priceRange[1]) return false;
+
+        // 🔎 Use shared search state
+        if (search.trim()) {
+          const query = search.toLowerCase();
+          const searchIn = [
+            product.name?.toLowerCase() || "",
+            ...(product.sub_category?.map((cat) => cat.name?.toLowerCase()) ||
+              []),
+            ...(product.variantsId?.map((v) => v.condition?.toLowerCase()) ||
+              []),
+          ].join(" ");
+          if (!searchIn.includes(query)) return false;
+        }
+
+        if (selectedCats.length > 0) {
+          const prodCatIds = (product.sub_category || []).map((cat) => cat._id);
+          if (!prodCatIds.some((id) => selectedCats.includes(id))) return false;
+        }
+
+        if (selectedSizes.length > 0) {
+          const prodSizes =
+            product.variantsId?.flatMap((v) => v.variants_values || []) ?? [];
+          if (!prodSizes.some((sz) => selectedSizes.includes(sz))) return false;
+        }
+
+        // Filter by conditions (tags from API)
+        if (selectedConditions.length > 0) {
+          const productConditions = product.variantsId?.map(v => v.condition).filter(Boolean) || [];
+          if (!productConditions.some(condition => selectedConditions.includes(condition!))) return false;
+        }
+
+        // Filter by tags
+        if (selectedTags.length > 0) {
+          // Assuming tags are in product.tags or similar field
+          const productTags = product.tags || [];
+          if (!productTags.some(tag => selectedTags.includes(tag))) return false;
+        }
+
+        // Filter by variants
+        if (Object.keys(selectedVariants).length > 0) {
+          for (const [variantName, selectedValues] of Object.entries(selectedVariants)) {
+            if (selectedValues.length > 0) {
+              const productVariantValues = product.variantsId?.flatMap(v => v.variants_values || []) ?? [];
+              if (!productVariantValues.some(value => selectedValues.includes(value))) return false;
+            }
+          }
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        const getPrice = (p: Product) => {
+          const v =
+            p.variantsId?.find((x) => Number(x.variants_stock) > 0) ??
+            p.variantsId?.[0];
+          if (!v) return 0;
+          const sell = Number(v.selling_price || 0);
+          const offer = Number(v.offer_price || sell);
+          const start = v.discount_start_date
+            ? new Date(v.discount_start_date).getTime()
+            : 0;
+          const end = v.discount_end_date
+            ? new Date(v.discount_end_date).getTime()
+            : 0;
+          const now = Date.now();
+          const isOffer = offer < sell && now >= start && now <= end;
+          return isOffer ? offer : sell;
+        };
+        switch (sortBy) {
+          case "name":
+            return (a.name || "").localeCompare(b.name || "");
+          case "price-low":
+            return getPrice(a) - getPrice(b);
+          case "price-high":
+            return getPrice(b) - getPrice(a);
+          case "newest":
+          default:
+            return (b._id || "").localeCompare(a._id || "");
+        }
+      });
+  }, [
+    allProducts,
+    selectedCats,
+    selectedSizes,
+    selectedConditions,
+    selectedTags,
+    selectedVariants,
+    priceRange,
+    search,
+    sortBy,
+  ]);
+
+  const clearAllFilters = () => {
     setSelectedCats([]);
     setSelectedSizes([]);
-    setPriceRange([minPrice, maxPrice]);
-    setSearchQuery("");
-    setSortBy("newest");
-    setCurrentPage(1);
-  }, [minPrice, maxPrice]);
+    setSelectedConditions([]);
+    setSelectedTags([]);
+    setSelectedVariants({});
+    setPriceRange([calculatedMinPrice, calculatedMaxPrice]);
+    setSearch(""); // ✅ clear shared search too
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <ShopMobileHeader
-        isMobileFiltersOpen={isMobileFiltersOpen}
-        setIsMobileFiltersOpen={setIsMobileFiltersOpen}
-        sortBy={sortBy}
-        setSortBy={handleSortChange}
-        selectedCats={selectedCats}
-        selectedSizes={selectedSizes}
-        searchQuery={searchQuery}
-      />
-      <div className="flex flex-col md:flex-row">
-        <ShopFilters
-          categories={categories}
-          selectedCats={selectedCats}
-          setSelectedCats={handleCategoryChange}
-          selectedSizes={selectedSizes}
-          setSelectedSizes={handleSizeChange}
-          priceRange={priceRange}
-          setPriceRange={handlePriceRangeChange}
-          searchQuery={searchQuery}
-          setSearchQuery={handleSearchChange}
-          minPrice={minPrice}
-          maxPrice={maxPrice}
-          initialProducts={initialProducts}
-          filteredProductsCount={filteredProducts.length}
-          clearAllFilters={clearAllFilters}
-          isMobileFiltersOpen={isMobileFiltersOpen}
-          setIsMobileFiltersOpen={setIsMobileFiltersOpen}
-          sidebarRef={sidebarRef}
-        />
-        <main className="flex-1">
-          <ShopDesktopHeader
-            filteredAndSorted={filteredProducts}
-            initialProducts={initialProducts}
-            sortBy={sortBy}
-            setSortBy={handleSortChange}
-            totalFilteredCount={totalItems}
-          />
-          <div className="md:pb-16 lg:px-4">
-            <ShopProductsGrid
-              productsContainerRef={productsContainerRef}
-              filteredAndSorted={currentPageProducts}
-              initialProducts={initialProducts}
-              clearAllFilters={clearAllFilters}
-              containerWidth={typeof window !== "undefined" ? window.innerWidth - sidebarWidth : undefined}
-              isLoading={isLoading}
-            />
+    <div className="min-h-screen bg-secondary dark:bg-secondary">
+      <div className="mx-auto max-w-[1800px] px-2 md:px-4 lg:px-6 py-2 md:py-6 h-full">
+        <div className="h-full grid grid-cols-1 md:[grid-template-columns:390px_minmax(0,1fr)] gap-x-3">
+          <div className="h-full md:pb-8 pb-0" ref={sidebarRef}>
+            <div className="sticky top-20">
+              <Filters
+                categories={finalFilterOptions?.categories || categories}
+                selectedCats={selectedCats}
+                setSelectedCats={setSelectedCats}
+                selectedSizes={selectedSizes}
+                setSelectedSizes={setSelectedSizes}
+                priceRange={priceRange}
+                setPriceRange={setPriceRange}
+                search={search}          // ✅ fixed
+                setSearch={setSearch}   // ✅ fixed
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-8 mb-8">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={(page) => {
-                    setCurrentPage(page);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  itemsPerPage={itemsPerPage}
-                  totalItems={totalItems}
-                />
-              </div>
-            )}
-          </div>
-          <div className="hidden md:block">
-            <div className="md:fixed bottom-0 left-0 w-full bg-black py-2 text-center flex items-center justify-center gap-1 z-50">
-              <p className="flex flex-col sm:flex-row items-center justify-center gap-2 text-sm sm:text-base">
-                <span className="text-gray-400 text-sm dark:text-gray-300">Powered by:</span>
-                <a
-                  href="https://calquick.app"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:opacity-80 transition-opacity"
-                >
-                  <Image
-                    height={100}
-                    width={100}
-                    src={"https://calquick.app/images/logo/logo-white.png"}
-                    className="h-5 sm:h-6 w-auto object-contain"
-                    alt="calquick-logo"
-                    priority
-                  />
-                </a>
-              </p>
+                filterOptions={finalFilterOptions}
+                selectedConditions={selectedConditions}
+                setSelectedConditions={setSelectedConditions}
+                selectedTags={selectedTags}
+                setSelectedTags={setSelectedTags}
+                selectedVariants={selectedVariants}
+                setSelectedVariants={setSelectedVariants}
+
+                apiMinPrice={calculatedMinPrice}
+                apiMaxPrice={calculatedMaxPrice}
+
+                minPrice={calculatedMinPrice}
+                maxPrice={calculatedMaxPrice}
+                initialProducts={initialProducts}
+                filteredProductsCount={filteredAndSorted.length}
+                clearAllFilters={clearAllFilters}
+                isMobile={isMobile}
+                isMobileFiltersOpen={isMobileFiltersOpen}
+                setIsMobileFiltersOpen={setIsMobileFiltersOpen}
+              />
             </div>
           </div>
-        </main>
+
+          <main className="h-full flex-1 md:-mt-0 overflow-y-auto">   {/* 👈 overflow সরানো */}
+            <div className="overflow-y-auto scrollbar-hide h-full"> {/* 👈 scroll container শুধু main এ */}
+              <ShopDesktopHeader
+                filteredAndSorted={filteredAndSorted}
+                initialProducts={allProducts}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                isMobile={isMobile} // Pass isMobile state here
+
+                //new add
+
+                showSearch={showSearch}
+                setShowSearch={setShowSearch}
+                search={search}
+                setSearch={setSearch}
+
+
+              />
+              <ShopProductsGrid
+                filteredAndSorted={filteredAndSorted}
+                productsContainerRef={productsContainerRef as React.RefObject<HTMLDivElement>}
+                initialProducts={allProducts}
+                clearAllFilters={clearAllFilters}
+                containerWidth={
+                  typeof window !== "undefined"
+                    ? window.innerWidth - sidebarWidth
+                    : undefined
+                }
+                isLoadingMore={isLoadingMore}
+              />
+
+              {/* Load More Button */}
+              {hasMorePages && filteredAndSorted.length > 0 && (
+                <div className="flex justify-center py-8">
+                  <button
+                    onClick={loadMoreProducts}
+                    disabled={isLoadingMore}
+                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isLoadingMore ? "Loading..." : "Load More Products"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </main>
+        </div>
+
       </div>
     </div>
   );

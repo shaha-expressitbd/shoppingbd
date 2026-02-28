@@ -1,33 +1,28 @@
-// app/template.tsx
-
-import { notosans, ubuntuRegular } from "@/lib/fonts";
+import { notosans } from "@/lib/fonts";
 import { AppProviders } from "@/lib/Provider/AppProvider";
+import { GoogleTagManager } from "@next/third-parties/google";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import "./globals.css";
 
 // Site constants
-const SITE_URL = "https://Shoppingbd.com.bd";
-const OG_IMAGE_URL = `/assets/mega-logo.png`;
-const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID;
-const TAG_SERVER = process.env.NEXT_PUBLIC_TAG_SERVER;
-const GOOGLE_SITE_VERIFICATION_CODE =
-  process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION_CODE;
+const SITE_URL = "https://shoppersbd.com";
+const OG_IMAGE_URL = `/assets/logo.png`;
 
 export const metadata: Metadata = {
-  title: "Shoppingbd_girl| Your Ultimate Shopping Destination",
+  title: "shoppersbd | Your Ultimate Shopping Destination",
   description:
-    "Discover unbeatable deals on electronics, fashion, home goods & more at Shoppingbd!",
+    "Discover unbeatable deals on electronics, fashion, home goods & more at shoppersbd!",
   verification: {
-    google: GOOGLE_SITE_VERIFICATION_CODE,
+    google: "lbyp2dC9_aYxIWYVGEV5cnZ74DaZK40hAyrvvfiZqCQ",
   },
   openGraph: {
-    title: "Shoppingbd_girl| Your Ultimate Shopping Destination",
+    title: "shoppersbd | Your Ultimate Shopping Destination",
     description:
-      "Discover unbeatable deals on electronics, fashion, home goods & more at Shoppingbd!",
+      "Discover unbeatable deals on electronics, fashion, home goods & more at shoppersbd!",
     url: SITE_URL,
-    siteName: "Shoppingbd",
+    siteName: "shoppersbd",
     type: "website",
     locale: "en_US",
     images: [
@@ -35,48 +30,45 @@ export const metadata: Metadata = {
         url: OG_IMAGE_URL,
         width: 1200,
         height: 630,
-        alt: "Shoppingbd_girllogo on shopping-cart background",
+        alt: "shoppersbd logo on shopping-cart background",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Shoppingbd_girl| Your Ultimate Shopping Destination",
+    title: "shoppersbd | Your Ultimate Shopping Destination",
     description:
-      "Discover unbeatable deals on electronics, fashion, home goods & more at Shoppingbd!",
+      "Discover unbeatable deals on electronics, fashion, home goods & more at shoppersbd!",
     images: [OG_IMAGE_URL],
   },
 };
 
 export default function Template({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={ubuntuRegular.className}
-    >
+    <html lang="en" suppressHydrationWarning>
       <head>
-        <title>Shoppingbd | Your Ultimate Shopping Destination</title>
-        <meta
-          name="facebook-domain-verification"
-          content={`${process.env.NEXT_PUBLIC_FACEBOOK_DOMAIN_VERIFICATION}`}
+        <title>shoppersbd | Your Ultimate Shopping Destination</title>
+
+        {/* FACEBOOK  */}
+        {process.env.NEXT_PUBLIC_FACEBOOK_DOMAIN_VERIFICATION && (
+          <meta
+            name="facebook-domain-verification"
+            content={process.env.NEXT_PUBLIC_FACEBOOK_DOMAIN_VERIFICATION}
+          />
+        )}
+        {/* GOOGLE */}
+        {process.env.NEXT_PUBLIC_GOOGLE_DOMAIN_VERIFICATION && (
+          <meta
+            name="google-site-verification"
+            content={process.env.NEXT_PUBLIC_GOOGLE_DOMAIN_VERIFICATION}
+          />
+        )}
+        <link rel="dns-prefetch" href="//cdn.cloudecalquick.xyz" />
+        <link
+          rel="preconnect"
+          href="https://cdn.cloudecalquick.xyz"
+          crossOrigin="anonymous"
         />
-        {/* <Script
-          id="gtm-script"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-          (function(w,d,s,l,i){
-            w[l]=w[l]||[];
-            w[l].push({'gtm.start': new Date().getTime(), event:'gtm.js'});
-            var f=d.getElementsByTagName(s)[0],
-                j=d.createElement(s);
-            j.async=true;
-          j.src="${TAG_SERVER}?"+i;f.parentNode.insertBefore(j,f);})
-            (window,document,'script','dataLayer','${GTM_ID}');
-        `,
-          }}
-        /> */}
         <Script
           id="fb-script"
           strategy="afterInteractive"
@@ -103,7 +95,6 @@ fbq('track', 'PageView');
           <main className="bg-white dark:bg-gray-800 cursor-default">
             <Toaster richColors position="top-center" closeButton />
             {children}
-            {/* <ConsentManager /> */}
           </main>
         </AppProviders>
 
@@ -135,18 +126,29 @@ fbq('track', 'PageView');
         `,
           }}
         />
-        {/* <GoogleTagManager gtmId={process.env.NEXT_PUBLIC_GTM_ID as string} /> */}
-        {/* <noscript>
+        {/* Global Error Logging */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+            window.onerror = function(message, source, lineno, colno, error) {
+              console.error('Error:', { message, source, lineno, colno, error });
+              return true;
+            };
+          `,
+          }}
+        />
+        {process.env.NEXT_PUBLIC_GTM_ID && (
+          <GoogleTagManager gtmId={process.env.NEXT_PUBLIC_GTM_ID} />
+        )}
+        {/* GTM noscript fallback */}
+        <noscript>
           <iframe
             src={`${process.env.NEXT_PUBLIC_TAG_SERVER}/ns.html?id=${process.env.NEXT_PUBLIC_GTM_ID}`}
             height="0"
             width="0"
-            style={{ display: 'none', visibility: 'hidden' }}
+            style={{ display: "none", visibility: "hidden" }}
           ></iframe>
-        </noscript> */}
-
-        {/* <GoogleTagManager gtmId="GTM-5DD74SGK" /> */}
-        {/* <GoogleAnalytics gaId='G-S64FV5JQ3N' /> */}
+        </noscript>
       </body>
     </html>
   );
